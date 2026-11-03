@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { createRectangularRoomGeometry, normalizeRoomGeometry, roomGeometryBounds, validateRoomGeometry } from "../lib/geometry/room.js";
 
@@ -95,6 +95,11 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
   const [doorOffset, setDoorOffset] = useState("200");
   const [doorWidth, setDoorWidth] = useState("900");
   const [editorError, setEditorError] = useState("");
+  const [traceImageUrl, setTraceImageUrl] = useState("");
+  const [traceImageSize, setTraceImageSize] = useState(null);
+  const [tracePoints, setTracePoints] = useState([]);
+  const [traceActive, setTraceActive] = useState(false);
+  const traceSvgRef = useRef(null);
 
   const activeGeometry = useMemo(
     () => validOrFallbackGeometry(geometry, widthMm, lengthMm),
@@ -110,6 +115,13 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
     return { index, start: point, end: next, length: Math.hypot(dx, dy) };
   }) || [];
   const geometryError = geometry ? validateRoomGeometry(geometry) : null;
+  const traceImageBounds = useMemo(() => {
+    if (!traceImageSize) return null;
+    const scale = Math.min(400 / traceImageSize.width, 260 / traceImageSize.height);
+    const width = traceImageSize.width * scale;
+    const height = traceImageSize.height * scale;
+    return { x: (400 - width) / 2, y: (260 - height) / 2, width, height };
+  }, [traceImageSize]);
 
   useEffect(() => {
     if (mode === "custom" && geometry?.zones?.[0]?.boundary) setCustomBoundary(serializeBoundary(geometry.zones[0].boundary));
@@ -118,6 +130,20 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
   useEffect(() => {
     if (!zoneOptions.some((zone) => zone.id === featureZoneId) && zoneOptions[0]) setFeatureZoneId(zoneOptions[0].id);
   }, [featureZoneId, zoneOptions]);
+
+  useEffect(() => {
+    if (!traceImageUrl) return undefined;
+    let active = true;
+    const image = new Image();
+    image.onload = () => { if (active) setTraceImageSize({ width: image.naturalWidth, height: image.naturalHeight }); };
+    image.onerror = () => { if (active) setEditorError("Could not read this image. Choose a PNG, JPEG, or WebP floor plan."); };
+    image.src = traceImageUrl;
+    return () => { active = false; };
+  }, [traceImageUrl]);
+
+  useEffect(() => () => {
+    if (traceImageUrl) URL.revokeObjectURL(traceImageUrl);
+  }, [traceImageUrl]);
 
   function publish(nextGeometry) {
     const error = validateRoomGeometry(nextGeometry);
@@ -239,6 +265,68 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
     publish(next);
   }
 
+  function selectTraceImage(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setEditorError("Choose a PNG, JPEG, or WebP image smaller than 10 MB.");
+      event.target.value = "";
+      return;
+    }
+    setTraceImageSize(null);
+    setTracePoints([]);
+    setTraceActive(false);
+    setTraceImageUrl(URL.createObjectURL(file));
+    setEditorError("");
+  }
+
+  function addTracePoint(event) {
+    if (!traceActive || !traceImageBounds || !traceSvgRef.current) return;
+    const bounds = traceSvgRef.current.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) / bounds.width * 400;
+    const y = (event.clientY - bounds.top) / bounds.height * 260;
+    if (x < traceImageBounds.x || x > traceImageBounds.x + traceImageBounds.width
+      || y < traceImageBounds.y || y > traceImageBounds.y + traceImageBounds.height) return;
+    setTracePoints((points) => [...points, {
+      x: (x - traceImageBounds.x) / traceImageBounds.width,
+      y: (y - traceImageBounds.y) / traceImageBounds.height,
+    }]);
+  }
+
+  function applyTrace() {
+    if (tracePoints.length < 3) {
+      setEditorError("Trace at least three outline points before applying the room boundary.");
+      return;
+    }
+    const minX = Math.min(...tracePoints.map((point) => point.x));
+    const maxX = Math.max(...tracePoints.map((point) => point.x));
+    const minY = Math.min(...tracePoints.map((point) => point.y));
+    const maxY = Math.max(...tracePoints.map((point) => point.y));
+    if (maxX - minX < 0.01 || maxY - minY < 0.01) {
+      setEditorError("The traced outline needs measurable width and length.");
+      return;
+    }
+    try {
+      const base = withBaseGeometry(geometry, widthMm, lengthMm);
+      const width = Number(widthMm);
+      const length = Number(lengthMm);
+      const boundary = tracePoints.map((point) => [
+        Math.round(((point.x - minX) / (maxX - minX)) * width * 100) / 100,
+        Math.round(((point.y - minY) / (maxY - minY)) * length * 100) / 100,
+      ]);
+      const next = {
+        ...base,
+        zones: base.zones.map((zone, index) => index === 0 ? { ...zone, boundary } : zone),
+      };
+      setCustomBoundary(serializeBoundary(boundary));
+      setMode("custom");
+      setTraceActive(false);
+      publish(next);
+    } catch (error) {
+      setEditorError(error.message || "Could not apply the traced room boundary.");
+    }
+  }
+
   return (
     <section className="geometry-editor" aria-label="Room geometry">
       <div className="geometry-editor-heading"><div><strong>Room geometry</strong><span>BOUNDARIES / MM</span></div><RoomPreview geometry={geometry} widthMm={widthMm} lengthMm={lengthMm} /></div>
@@ -256,6 +344,24 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
       </div>}
 
       {mode === "custom" && <div className="geometry-custom-outline">
+        <div className="geometry-trace">
+          <label className="input-label" htmlFor="floor-plan-image">Trace from floor-plan image <span>PNG / JPG / WEBP · MAX 10 MB</span></label>
+          <input id="floor-plan-image" className="geometry-file-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={selectTraceImage} />
+          {traceImageUrl && traceImageBounds && <>
+            <svg ref={traceSvgRef} className={`geometry-trace-canvas ${traceActive ? "is-tracing" : ""}`} viewBox="0 0 400 260" preserveAspectRatio="none" role="img" aria-label="Floor plan image. Click room boundary points in order while tracing is active." onPointerDown={addTracePoint}>
+              <rect width="400" height="260" fill="#172226" />
+              <image href={traceImageUrl} x={traceImageBounds.x} y={traceImageBounds.y} width={traceImageBounds.width} height={traceImageBounds.height} />
+              {tracePoints.length > 1 && <polyline points={tracePoints.map((point) => `${traceImageBounds.x + point.x * traceImageBounds.width},${traceImageBounds.y + point.y * traceImageBounds.height}`).join(" ")} fill={tracePoints.length > 2 ? "rgba(0, 200, 220, .13)" : "none"} stroke="#00c8d8" strokeWidth="2" />}
+              {tracePoints.map((point, index) => <circle key={index} cx={traceImageBounds.x + point.x * traceImageBounds.width} cy={traceImageBounds.y + point.y * traceImageBounds.height} r="3" fill="#00c8d8" stroke="#fff" strokeWidth="1" />)}
+            </svg>
+            <div className="geometry-trace-actions">
+              <button className="geometry-action" type="button" onClick={() => { setTracePoints([]); setTraceActive(true); setEditorError(""); }}>Trace room outline</button>
+              <button className="geometry-action secondary" type="button" onClick={() => setTracePoints((points) => points.slice(0, -1))} disabled={!tracePoints.length}>Undo point</button>
+              <button className="geometry-action" type="button" onClick={applyTrace} disabled={tracePoints.length < 3}>Use traced outline</button>
+            </div>
+            <small className="geometry-trace-note">Click at least three points clockwise or counter-clockwise. The trace is scaled to the measured room width and length above. The image stays in this browser; only the point geometry is saved.</small>
+          </>}
+        </div>
         <label className="input-label" htmlFor="custom-room-boundary">Area 1 outline <span>ORDERED X,Y POINTS</span></label>
         <textarea id="custom-room-boundary" className="text-control geometry-points" value={customBoundary} onChange={(event) => setCustomBoundary(event.target.value)} />
         <button className="geometry-action" type="button" onClick={applyCustomBoundary}>Apply outline</button>

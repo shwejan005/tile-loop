@@ -18,7 +18,8 @@
     "supabase:lint": "supabase db lint --schema public --fail-on warning",
     "test:e2e": "playwright test",
     "catalog:rak-uae": "node scripts/sync-rak-catalog.js",
-    "catalog:import": "node scripts/import-tile-catalog.js"
+    "catalog:import": "node scripts/import-tile-catalog.js",
+    "catalog:import-approved": "node scripts/import-approved-supplier-feed.js"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

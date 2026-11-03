@@ -44,7 +44,6 @@ test("invalid dimensions, labels, and tile orientations are rejected", () => {
   assert.match(validateForm({ ...DEFAULT_FORM, planId: "   " }), /anonymous plan label/);
   assert.match(validateForm({ ...DEFAULT_FORM, planId: "a".repeat(25) }), /24 characters/);
   assert.match(validateForm({ ...DEFAULT_FORM, orientation: "diagonal" }), /tile direction/);
-  assert.match(validateForm({ ...DEFAULT_FORM, pattern: "herringbone" }), /not supported yet/);
   assert.match(validateForm({ ...DEFAULT_FORM, pattern: "__proto__" }), /known installation pattern/);
   assert.match(validateForm({ ...DEFAULT_FORM, grout: 0.001 }), /two decimal places/);
   assert.match(validateForm(null), /dimensions/);
@@ -100,6 +99,27 @@ test("polygon rooms produce numbered cut shapes, shape-aware offcuts, and multip
   assert.equal(diagonal.patternStrategyVersion, "diagonal-grid-v1");
   assert.notDeepEqual(offset.pieces.map((piece) => [piece.x, piece.y]), straight.pieces.map((piece) => [piece.x, piece.y]));
   assert.ok(diagonal.pieces.some((piece) => piece.shape === "polygon"));
+});
+
+test("herringbone uses a 90-degree 2:1 weave and rejects unsupported tile ratios", () => {
+  const geometry = createRectangularRoomGeometry(6000, 4800);
+  const plan = calculatePlan({
+    ...DEFAULT_FORM,
+    roomWidth: 6000,
+    roomLength: 4800,
+    tileWidth: 600,
+    tileLength: 300,
+    kerf: 1,
+    reserve: 0,
+    pattern: "herringbone",
+    roomGeometry: geometry,
+  });
+  assert.equal(plan.error, undefined);
+  assert.equal(plan.patternStrategyVersion, "herringbone-domino-v1");
+  assert.ok(plan.stockTiles > 0);
+  assert.ok(plan.pieces.every((piece) => piece.geometry.length > 0));
+  assert.ok(plan.layoutWarnings.some((warning) => /T-junctions/.test(warning)));
+  assert.match(calculatePlan({ ...DEFAULT_FORM, tileWidth: 600, tileLength: 400, pattern: "herringbone" }).error, /2:1/);
 });
 
 test("carton rounding is opt-in and remains separate from the tile estimate", () => {

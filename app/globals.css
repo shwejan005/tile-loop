@@ -425,6 +425,15 @@ a { color: inherit; text-decoration: none; }
 .geometry-editor .text-control { height: 31px; }
 .geometry-editor select.text-control { cursor: pointer; }
 .geometry-custom-outline, .geometry-add-area, .geometry-zone-controls, .geometry-doorway-controls { display: grid; gap: 5px; padding-top: 7px; border-top: 1px solid #edf1f1; }
+.geometry-trace { display: grid; gap: 5px; margin-bottom: 5px; }
+.geometry-file-input { width: 100%; min-height: 30px; color: #728386; font-size: 8px; }
+.geometry-file-input::file-selector-button { min-height: 27px; margin-right: 7px; padding: 0 8px; border: 1px solid #dce5e6; background: white; color: #526468; font-size: 8px; }
+.geometry-trace-canvas { display: block; width: 100%; aspect-ratio: 400 / 260; border: 1px solid #263a3e; background: #172226; touch-action: none; }
+.geometry-trace-canvas.is-tracing { cursor: crosshair; }
+.geometry-trace-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.geometry-trace-actions button { padding: 0 4px; font-size: 7px; }
+.geometry-trace-actions button:disabled { opacity: .45; }
+.geometry-trace-note { color: #929fa2; font-size: 7px; line-height: 1.45; }
 .geometry-points { height: 52px !important; min-height: 52px; padding: 6px 8px !important; resize: vertical; font-family: var(--font-mono); font-size: 8px; line-height: 1.45; }
 .geometry-action { display: inline-flex; min-height: 28px; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 1px solid #badfe2; background: #f1fbfb; color: #167982; font-size: 8px; font-weight: 700; }
 .geometry-action:hover { border-color: #60c8d1; background: #e7f9fa; }
@@ -509,6 +518,8 @@ a { color: inherit; text-decoration: none; }
 .demo-save-panel p { margin: 0; color: #788689; font-size: 8px; line-height: 1.5; }
 .demo-save-panel a { text-decoration: none; }
 .landing-actions { column-gap: 12px; row-gap: 9px; }
+.layout-warning { display: flex; align-items: start; gap: 6px; margin-top: 8px; padding: 7px; border: 1px solid #efdfbe; background: #fffbf1; color: #8b6b2b; font-size: 8px; line-height: 1.45; }
+.layout-warning svg { flex: 0 0 auto; }
 
 .error-page { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: #f5f8f8; }
 .error-page > section { width: min(100%, 520px); padding: 28px; border: 1px solid var(--line); background: white; }

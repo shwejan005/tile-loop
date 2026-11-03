@@ -12,6 +12,6 @@ TileLoop is a supplier-independent planning platform for tile installers and the
 
 ## Current supported scope
 
-The app supports polygon room zones with rectangular obstacles/openings and doorway markers; straight, half-offset, and diagonal layouts; numbered cut shapes; interactive 2D/3D inspection; SVG export; kerf-aware conservative nesting; offcut fit candidates; user-entered carton rounding; project history; and recorded actual tile use, breakage, labor, and practicality.
+The app supports polygon room zones with rectangular obstacles/openings and doorway markers; straight, half-offset, diagonal, and 2:1 herringbone layouts; manual image tracing; numbered cut shapes; interactive 2D/3D inspection; SVG export; kerf-aware conservative nesting; offcut fit candidates; supplier-feed fields; and recorded actual tile use, breakage, labor, and practicality.
 
-Herringbone, image-based plan import, supplier-backed purchasing quantities, and validated savings claims remain future work. Current cut packing is heuristic, and an installer must review feasibility before ordering or cutting.
+No approved carton/price/stock feed is currently included. Current cut packing is heuristic, image outlines are traced manually, and an installer must review feasibility before ordering or cutting.

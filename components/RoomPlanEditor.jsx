@@ -126,6 +126,8 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
   function updateField(name, value) {
     setForm((current) => {
       const next = { ...current, [name]: value };
+      if (name === "pattern" && value === "herringbone") next.orientation = "standard";
+      if (["tileWidth", "tileLength"].includes(name)) next.tilesPerCarton = "";
       if (name === "roomGeometry") {
         if (value && !validateRoomGeometry(value)) {
           const bounds = roomGeometryBounds(value);
@@ -152,7 +154,12 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
   function chooseCatalogItem(item) {
     setCatalogItemId(item.id);
     setCatalogSearch(`${item.brand} · ${item.collection_name} · ${item.color} · ${item.format_label}`);
-    setForm((current) => ({ ...current, tileWidth: Number(item.width_mm), tileLength: Number(item.height_mm) }));
+    setForm((current) => ({
+      ...current,
+      tileWidth: Number(item.width_mm),
+      tileLength: Number(item.height_mm),
+      tilesPerCarton: item.tiles_per_carton == null ? "" : String(item.tiles_per_carton),
+    }));
     setInstallerEstimate("");
     setSelectedPiece(null);
     setSaveMessage("");
@@ -161,6 +168,7 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
   function clearCatalogItem() {
     setCatalogItemId("");
     setCatalogSearch("");
+    setForm((current) => ({ ...current, tilesPerCarton: "" }));
     setInstallerEstimate("");
     setSaveMessage("");
   }
@@ -229,8 +237,8 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
             <div className="control-section-heading tile-size-heading"><span>Supplier catalog</span><span>{catalogItems.length} PUBLISHED FORMATS</span></div>
             <div className="catalog-picker">
               <label className="visually-hidden" htmlFor="catalog-search">Search supplier catalog</label>
-              <input id="catalog-search" className="text-control" type="search" value={catalogSearch} onChange={(event) => { setCatalogSearch(event.target.value); setCatalogItemId(""); setInstallerEstimate(""); }} placeholder="Search brand, collection, color, or code" />
-              {catalogItemId && selectedCatalogItem && <div className="catalog-selected"><strong>{catalogLabel(selectedCatalogItem)}</strong><span>{selectedCatalogItem.width_mm} × {selectedCatalogItem.height_mm} mm{selectedCatalogItem.thickness_mm ? ` · ${selectedCatalogItem.thickness_mm} mm thick` : ""} · {selectedCatalogItem.supplier_code}</span><button className="icon-text-button" type="button" onClick={clearCatalogItem}>Use custom size</button>{selectedCatalogItem.quality_flags?.length > 0 && <small>Supplier metadata needs review: carton quantity and stock/price are not included in this public catalog.</small>}</div>}
+              <input id="catalog-search" className="text-control" type="search" value={catalogSearch} onChange={(event) => { setCatalogSearch(event.target.value); setCatalogItemId(""); setForm((current) => ({ ...current, tilesPerCarton: "" })); setInstallerEstimate(""); }} placeholder="Search brand, collection, color, or code" />
+              {catalogItemId && selectedCatalogItem && <div className="catalog-selected"><strong>{catalogLabel(selectedCatalogItem)}</strong><span>{selectedCatalogItem.width_mm} × {selectedCatalogItem.height_mm} mm{selectedCatalogItem.thickness_mm ? ` · ${selectedCatalogItem.thickness_mm} mm thick` : ""} · {selectedCatalogItem.supplier_code}</span><span>{selectedCatalogItem.tiles_per_carton == null ? "Carton size unavailable" : `${selectedCatalogItem.tiles_per_carton} tiles/carton`} · {selectedCatalogItem.price_amount == null ? "Price unavailable" : `${formatNumber(Number(selectedCatalogItem.price_amount))} ${selectedCatalogItem.price_currency} / ${selectedCatalogItem.price_unit}`} · {selectedCatalogItem.stock_quantity == null ? "Stock unavailable" : `${selectedCatalogItem.stock_quantity} ${selectedCatalogItem.stock_unit} in stock`}</span>{selectedCatalogItem.ordering_status === "orderable" ? <small>Supplier facts verified {selectedCatalogItem.facts_verified_at ? new Date(selectedCatalogItem.facts_verified_at).toLocaleDateString() : ""}. Confirm current availability before purchase.</small> : <small>Planning only — supplier facts are not approved for ordering.</small>}<button className="icon-text-button" type="button" onClick={clearCatalogItem}>Use custom size</button></div>}
               {!catalogItemId && catalogSearch.trim().length >= 2 && <div className="catalog-search-results" role="listbox" aria-label="Catalog matches">
                 {filteredCatalogItems.map((item) => <button className="catalog-option" key={item.id} type="button" role="option" aria-selected="false" onClick={() => chooseCatalogItem(item)}><strong>{catalogLabel(item)}</strong><span>{item.width_mm} × {item.height_mm} mm · {item.supplier_code}</span></button>)}
                 {!filteredCatalogItems.length && <p className="catalog-empty">No published formats match that search.</p>}
@@ -250,10 +258,10 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
             <p className="microcopy">Use the measured blade kerf. The nesting estimate conservatively reserves it on each cut dimension.</p>
 
             <label className="input-label select-label" htmlFor="pattern">Installation pattern</label>
-            <div className="select-shell"><select id="pattern" value={form.pattern || "straight"} onChange={(event) => updateField("pattern", event.target.value)}><option value="straight">Straight lay</option><option value="half-offset">Half-offset (50%)</option><option value="diagonal">Diagonal (45°)</option></select><ChevronDown size={15} /></div>
+            <div className="select-shell"><select id="pattern" value={form.pattern || "straight"} onChange={(event) => updateField("pattern", event.target.value)}><option value="straight">Straight lay</option><option value="half-offset">Half-offset (50%)</option><option value="diagonal">Diagonal (45°)</option><option value="herringbone">Herringbone 90° (2:1 tile)</option></select><ChevronDown size={15} /></div>
 
-            <label className="input-label select-label" htmlFor="orientation">Tile direction</label>
-            <div className="select-shell"><select id="orientation" value={form.orientation} onChange={(event) => updateField("orientation", event.target.value)}><option value="standard">Tile width across room width</option><option value="rotated">Rotate tile 90°</option></select><ChevronDown size={15} /></div>
+            <label className="input-label select-label" htmlFor="orientation">Tile direction{form.pattern === "herringbone" && <span>SET BY PATTERN</span>}</label>
+            <div className="select-shell"><select id="orientation" disabled={form.pattern === "herringbone"} value={form.orientation} onChange={(event) => updateField("orientation", event.target.value)}><option value="standard">Tile width across room width</option><option value="rotated">Rotate tile 90°</option></select><ChevronDown size={15} /></div>
 
             <div className="control-section-heading buffer-heading"><span>Order buffer</span><span>BREAKAGE / REPAIR</span></div>
             <div className="range-line"><input aria-label="Order buffer percent" type="range" min="0" max="20" step="1" value={form.reserve} onChange={(event) => updateField("reserve", Number(event.target.value))} style={{ "--range-fill": `${Number(form.reserve) * 5}%` }} /><strong>{formatNumber(Number(form.reserve) || 0)}<small>%</small></strong></div>
@@ -264,6 +272,7 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
 
             {plan.error && <div className="validation-error" role="alert"><TriangleAlert size={14} /><span>{plan.error}</span></div>}
             <div className="assumption-card"><CircleHelp size={15} /><p><strong>{validPlan?.geometryMode ? "Polygon-clipped layout." : "Rectangular room layout."}</strong> {validPlan?.geometryMode ? "Cut-piece bounds are conservatively packed with kerf; reuse candidates require a bounding-box fit and still need installer review." : "The selected pattern places tiles on a centered grid; no perimeter grout is added. Tile dimensions are finished stock dimensions."}</p></div>
+            {validPlan?.layoutWarnings?.map((warning) => <div className="layout-warning" role="status" key={warning}><TriangleAlert size={13} /><span>{warning}</span></div>)}
             {demoMode ? <div className="save-plan-panel demo-save-panel"><span className="field-kicker">DEMO MODE / READ ONLY</span><p>Start a private project to save plans, compare installer estimates, and record actual installation outcomes.</p><Link className="save-plan-button" href="/signup">Create an account <ArrowRight size={14} /></Link></div> : <div className="save-plan-panel">
               <span className="field-kicker">SAVE TO PROJECT</span>
               <label className="input-label" htmlFor="installer-estimate">Installer estimate <span>OPTIONAL · WHOLE TILES</span></label>

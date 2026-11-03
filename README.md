@@ -2,13 +2,15 @@
 
 TileLoop is a brand-independent tile installation planner. It helps installers model room areas, compare tile layouts, inspect cuts, estimate material, and record what happened on site.
 
+For a short introduction, see [PRESENTATION_SCRIPT.md](./PRESENTATION_SCRIPT.md). To run the product tour, see [DEMO_GUIDE.md](./DEMO_GUIDE.md).
+
 ## Features
 
 - Polygon room outlines, multiple areas, floor openings, obstacles/columns, and doorway markers.
-- Straight, half-offset, and diagonal tile layouts with grout, orientation, kerf, and reserve settings.
+- Straight, half-offset, diagonal, and 90° herringbone layouts with grout, orientation, kerf, and reserve settings. Herringbone requires 2:1 tile stock.
 - Numbered cut pieces, interactive 2D/3D views, SVG export, and conservative shape-aware offcut candidates.
 - Private projects and calculation history, installer comparisons, carton rounding from a user-verified pack size, and actual installation outcomes with a pilot evaluation page.
-- Generic supplier catalog support. RAK UAE data is a staging import—not an ordering feed.
+- Generic supplier catalog support. RAK UAE data is a staging import—not an ordering feed. See [SUPPLIER_FEED.md](./SUPPLIER_FEED.md) for the approved facts import.
 
 ## Run the demo locally
 
@@ -42,4 +44,4 @@ npm audit
 
 ## Important limits
 
-Polygon cuts and offcut reuse use conservative bounding-box nesting; the result is not a proven optimum and needs installer review. Carton size is user-entered. The public RAK API does not provide verified carton, price, or stock data, so scraped records stay unpublished and cannot drive ordering. Pilot metrics are descriptive—not proof of accuracy or savings. Herringbone and floor-plan image import are not implemented. See [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md) for the short product direction.
+Polygon cuts and offcut reuse use conservative bounding-box nesting; the result is not a proven optimum and needs installer review. Herringbone supports 2:1 tiles and warns about wider T-junction grout pockets. Floor-plan images can be traced manually; automatic plan recognition is not provided. Carton, price, and stock fields can be loaded from a reviewed supplier feed; no approved supplier feed is included. Public RAK data stays staging-only. Pilot metrics are descriptive—not proof of accuracy or savings. See [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md) for the short product direction.

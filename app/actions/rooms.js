@@ -18,7 +18,7 @@ const inputSchema = z.object({
   grout: z.coerce.number().finite(),
   kerf: z.coerce.number().finite(),
   orientation: z.enum(["standard", "rotated"]),
-  pattern: z.enum(["straight", "half-offset", "diagonal"]).default("straight"),
+  pattern: z.enum(["straight", "half-offset", "diagonal", "herringbone"]).default("straight"),
   tilesPerCarton: z.union([z.literal(""), z.coerce.number().int().min(1).max(1000)]).default(""),
   roomGeometry: z.unknown().nullable().optional(),
   reserve: z.coerce.number().finite(),
@@ -53,6 +53,7 @@ function buildResultSummary(plan) {
     roomAreaMm2: plan.roomAreaMm2,
     pattern: plan.pattern,
     patternStrategyVersion: plan.patternStrategyVersion,
+    layoutWarnings: plan.layoutWarnings || [],
     stockTiles: plan.stockTiles,
     orderQuantity: plan.orderQuantity,
     cartonsToOrder: plan.cartonsToOrder,
@@ -149,6 +150,16 @@ async function persistRoomPlan(auth, { projectId, roomPlanId, catalogItemId = nu
       thicknessMm: catalogItem.thickness_mm == null ? null : Number(catalogItem.thickness_mm),
       qualityFlags: catalogItem.quality_flags,
       sourcePage: catalogItem.source_page_url,
+      tilesPerCarton: catalogItem.tiles_per_carton == null ? null : Number(catalogItem.tiles_per_carton),
+      priceAmount: catalogItem.price_amount == null ? null : Number(catalogItem.price_amount),
+      priceCurrency: catalogItem.price_currency,
+      priceUnit: catalogItem.price_unit,
+      stockQuantity: catalogItem.stock_quantity == null ? null : Number(catalogItem.stock_quantity),
+      stockUnit: catalogItem.stock_unit,
+      stockUpdatedAt: catalogItem.stock_updated_at,
+      orderingStatus: catalogItem.ordering_status,
+      factsSourceReference: catalogItem.facts_source_reference,
+      factsVerifiedAt: catalogItem.facts_verified_at,
     } : null,
     ...(sourceNote ? { sourceNote } : {}),
   };
@@ -200,7 +211,7 @@ export async function saveRoomPlanAction(untrustedInput) {
   if (catalogItemId) {
     const { data, error } = await auth.supabase
       .from("catalog_items")
-      .select("id, supplier_key, market_code, supplier_code, brand, product_name, collection_name, color, format_label, width_mm, height_mm, thickness_mm, quality_flags, source_page_url, catalog_status")
+      .select("id, supplier_key, market_code, supplier_code, brand, product_name, collection_name, color, format_label, width_mm, height_mm, thickness_mm, quality_flags, source_page_url, catalog_status, tiles_per_carton, price_amount, price_currency, price_unit, stock_quantity, stock_unit, stock_updated_at, ordering_status, facts_source_reference, facts_verified_at")
       .eq("id", catalogItemId)
       .eq("catalog_status", "published")
       .maybeSingle();
@@ -208,7 +219,12 @@ export async function saveRoomPlanAction(untrustedInput) {
     catalogItem = data;
     // Catalog dimensions are authoritative for a selected SKU; never trust the
     // browser's copied width/length values.
-    validatedForm = { ...form, tileWidth: Number(data.width_mm), tileLength: Number(data.height_mm) };
+      validatedForm = {
+        ...form,
+        tileWidth: Number(data.width_mm),
+        tileLength: Number(data.height_mm),
+        tilesPerCarton: data.tiles_per_carton == null ? form.tilesPerCarton : String(data.tiles_per_carton),
+      };
   }
 
   const result = await persistRoomPlan(auth, { ...saveInput, catalogItemId, catalogItem, form: validatedForm });

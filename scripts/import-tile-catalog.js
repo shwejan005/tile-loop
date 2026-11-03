@@ -22,7 +22,7 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
   const rows = catalog.products.map((product) => ({
-    supplier_key: "rak-ceramics",
+    supplier_key: "rak-ceramics-public-catalog",
     market_code: product.market,
     supplier_code: product.supplierCode,
     brand: "RAK Ceramics",

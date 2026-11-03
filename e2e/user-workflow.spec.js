@@ -16,7 +16,23 @@ test("public demo lets visitors inspect a polygon plan without signing in", asyn
   try {
     await page.goto("/demo");
     await expect(page.getByText(/Sample L-shaped room/)).toBeVisible();
-    await page.getByLabel("Installation pattern").selectOption("diagonal");
+    await page.getByLabel(/Trace from floor-plan image/).setInputFiles({
+      name: "floor-plan.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY2kAAAAASUVORK5CYII=", "base64"),
+    });
+    const traceCanvas = page.locator(".geometry-trace-canvas");
+    await expect(traceCanvas).toBeVisible();
+    await page.getByRole("button", { name: "Trace room outline" }).click();
+    const traceBox = await traceCanvas.boundingBox();
+    for (const [x, y] of [[75, 5], [325, 5], [325, 90], [230, 90], [230, 255], [75, 255]]) {
+      await traceCanvas.click({ position: { x: traceBox.width * x / 400, y: traceBox.height * y / 260 } });
+    }
+    await page.getByRole("button", { name: "Use traced outline" }).click();
+    await expect(page.locator("#custom-room-boundary")).toHaveValue(/5200/);
+    await page.getByLabel("Installation pattern").selectOption("herringbone");
+    await expect(page.locator(".validation-error")).toHaveCount(0);
+    await expect(page.locator(".layout-warning")).toContainText("T-junctions");
     await page.getByRole("button", { name: "2D", exact: true }).click();
     await expect(page.getByRole("img", { name: /Interactive two-dimensional tile cut plan/ })).toBeVisible();
     await page.locator(".plan-2d-piece").first().click();
@@ -279,7 +295,7 @@ test("a private user creates, versions, exports, and deletes a project", async (
     await expect(owner.getByLabel(/Installer estimate/)).toHaveValue("72");
     await owner.getByRole("button", { name: "Save room plan" }).click();
     await expect(owner).toHaveURL(new RegExp(`/projects/${projectId}/rooms/[0-9a-f-]+$`));
-    await expect(owner.getByText("straight-lay-kerf-1")).toBeVisible();
+    await expect(owner.getByText("tileloop-plan-2")).toBeVisible();
 
     const firstExportResponse = await owner.context().request.get(`${new URL(owner.url()).origin}/api/export`);
     expect(firstExportResponse.status()).toBe(200);

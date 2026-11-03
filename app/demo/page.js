@@ -23,7 +23,7 @@ function createDemoForm() {
     roomWidth: 5200,
     roomLength: 4200,
     tileWidth: 600,
-    tileLength: 600,
+    tileLength: 300,
     kerf: 1,
     pattern: "half-offset",
     tilesPerCarton: 8,
