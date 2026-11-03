@@ -302,7 +302,8 @@ test("a private user creates, versions, exports, and deletes a project", async (
     expect(exportData.projects).toHaveLength(1);
     const exportedSnapshots = exportData.projects[0].room_plans[0].plan_snapshots;
     expect(exportedSnapshots).toHaveLength(2);
-    expect(exportedSnapshots[0].installer_comparisons.installer_estimate_tiles).toBe(72);
+    const installerSnapshot = exportedSnapshots.find((snapshot) => snapshot.installer_comparisons);
+    expect(installerSnapshot.installer_comparisons.installer_estimate_tiles).toBe(72);
 
     stranger = await browser.newPage();
     await stranger.goto("/login");
