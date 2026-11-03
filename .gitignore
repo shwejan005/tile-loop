@@ -1,0 +1,13 @@
+.next/
+node_modules/
+out/
+.cache/
+supabase/.branches/
+supabase/.temp/
+.DS_Store
+npm-debug.log*
+.env*
+!.env.example
+playwright-report/
+test-results/
+blob-report/
