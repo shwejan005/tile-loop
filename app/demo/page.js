@@ -1,36 +1,8 @@
 import AppHeader from "../../components/AppHeader.jsx";
 import RoomPlanEditor from "../../components/RoomPlanEditor.jsx";
-import { createRectangularRoomGeometry } from "../../lib/geometry/room.js";
-import { DEFAULT_FORM } from "../../lib/planner.js";
+import { createDemoForm } from "../../lib/demo-sample.js";
 
 export const metadata = { title: "Interactive demo" };
-
-function createDemoForm() {
-  const roomGeometry = createRectangularRoomGeometry(5200, 4200);
-  roomGeometry.zones[0].boundary = [[0, 0], [5200, 0], [5200, 1600], [3200, 1600], [3200, 4200], [0, 4200]];
-  roomGeometry.zones[0].obstacles.push({
-    id: "demo-column",
-    boundary: [[1100, 550], [1500, 550], [1500, 950], [1100, 950]],
-  });
-  roomGeometry.zones[0].openings.push({
-    id: "demo-floor-opening",
-    boundary: [[400, 2100], [650, 2100], [650, 2350], [400, 2350]],
-  });
-  roomGeometry.zones[0].accessPoints.push({ id: "demo-doorway", kind: "doorway", segment: [[1400, 0], [2300, 0]] });
-  return {
-    ...DEFAULT_FORM,
-    planId: "DEMO-01",
-    roomWidth: 5200,
-    roomLength: 4200,
-    tileWidth: 600,
-    tileLength: 300,
-    kerf: 1,
-    pattern: "half-offset",
-    tilesPerCarton: 8,
-    reserve: 8,
-    roomGeometry,
-  };
-}
 
 export default function DemoPage() {
   return (
@@ -38,8 +10,13 @@ export default function DemoPage() {
       <AppHeader />
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <section className="demo-banner" aria-label="Demo information">
-        <div><span className="field-kicker">INTERACTIVE PRODUCT TOUR</span><strong>Sample L-shaped room · obstacle · floor opening · half-offset pattern</strong><p>All measurements and the 8-tiles-per-carton value are illustrative. Nothing is saved or orderable in this public demo.</p></div>
+        <div><span className="field-kicker">B2B INSTALLER WORKFLOW · INTERACTIVE DEMO</span><strong>For tile installers and contractors · Sample L-shaped room, obstacle, floor opening, and half-offset pattern</strong><p>The installer or estimator is the primary user. Customers receive read-only project links. All measurements and the 8-tiles-per-carton value are illustrative; nothing is saved or orderable in this demo.</p></div>
       </section>
+      <nav className="demo-workflow" aria-label="Demo walkthrough">
+        <a href="#planner"><span>01</span><strong>Room geometry</strong></a>
+        <a href="#plan-view"><span>02</span><strong>Layout and cuts</strong></a>
+        <a href="#estimate"><span>03</span><strong>Material estimate</strong></a>
+      </nav>
       <RoomPlanEditor projectId="" initialForm={createDemoForm()} catalogItems={[]} demoMode />
     </div>
   );

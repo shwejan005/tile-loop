@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { getAuthContext } from "../../lib/supabase/server.js";
 
@@ -42,6 +43,40 @@ export async function deleteProjectAction(projectId) {
   if (error || !data) return { error: "Could not delete this project. It may no longer be available." };
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+export async function createProjectShareLinkAction(projectId) {
+  const parsedId = z.string().uuid().safeParse(projectId);
+  if (!parsedId.success) return { error: "Project ID is invalid." };
+  const auth = await getAuthContext();
+  if (auth.status !== "authenticated") return { error: "Sign in again before sharing this project." };
+
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const { data, error } = await auth.supabase.rpc("rotate_project_share", {
+    p_project_id: parsedId.data,
+    p_token_hash: tokenHash,
+  });
+  if (error || !data) return { error: "Could not create a share link. Check that the project-sharing migration is applied." };
+  revalidatePath(`/projects/${parsedId.data}`);
+  return { path: `/share/${token}` };
+}
+
+export async function revokeProjectShareLinkAction(projectId) {
+  const parsedId = z.string().uuid().safeParse(projectId);
+  if (!parsedId.success) return { error: "Project ID is invalid." };
+  const auth = await getAuthContext();
+  if (auth.status !== "authenticated") return { error: "Sign in again before changing project sharing." };
+
+  const { data, error } = await auth.supabase.from("project_share_links")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("project_id", parsedId.data)
+    .is("revoked_at", null)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: "Could not revoke this share link." };
+  revalidatePath(`/projects/${parsedId.data}`);
+  return { success: Boolean(data) };
 }
 
 export async function deleteRoomPlanAction(projectId, roomPlanId) {

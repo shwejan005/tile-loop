@@ -4,16 +4,13 @@ import { useCallback, useMemo, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ArrowDownToLine, ArrowLeft, ArrowRight, ChevronDown, CircleHelp,
-  Layers3, Rotate3D, RotateCcw, Scissors, ShieldCheck, TriangleAlert,
-} from "lucide-react";
 import { calculatePlan, DEFAULT_FORM, formatArea, formatLocation, formatNumber, minimumTilesByArea } from "../lib/planner.js";
+import { buildPrintableCutListHtml, cutListToCsv } from "../lib/cut-list-export.js";
 import { roomGeometryBounds, resizeRoomGeometry, validateRoomGeometry } from "../lib/geometry/room.js";
 import { saveRoomPlanAction } from "../app/actions/rooms.js";
 import RoomGeometryEditor from "./RoomGeometryEditor.jsx";
 
-const RoomScene = dynamic(() => import("./RoomScene"), { ssr: false, loading: () => <div className="scene-loading"><span className="loading-spinner" /> Building your room model…</div> });
+const RoomScene = dynamic(() => import("./RoomScene"), { ssr: false, loading: () => <div className="scene-loading">Building your room model…</div> });
 const RoomPlan2D = dynamic(() => import("./RoomPlan2D.jsx"), { ssr: false });
 
 function escapeXml(value) {
@@ -28,6 +25,18 @@ function downloadText(name, contents, type) {
   anchor.download = name;
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function printCutList(plan) {
+  const html = buildPrintableCutListHtml(plan);
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    downloadText(`${plan.planId.replace(/[^a-z0-9_-]/gi, "-")}-cut-list.html`, html, "text/html;charset=utf-8");
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
 }
 
 function catalogLabel(item) {
@@ -95,7 +104,7 @@ function exportPlanSvg(plan) {
 export default function RoomPlanEditor({ projectId, roomPlanId = null, initialForm = DEFAULT_FORM, initialInstallerEstimate = "", initialCatalogItemId = null, catalogItems = [], history = [], demoMode = false }) {
   const [form, setForm] = useState(() => ({ ...DEFAULT_FORM, ...initialForm }));
   const [selectedPiece, setSelectedPiece] = useState(null);
-  const [modelView, setModelView] = useState("3d");
+  const [modelView, setModelView] = useState("2d");
   const [catalogItemId, setCatalogItemId] = useState(initialCatalogItemId || "");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [installerEstimate, setInstallerEstimate] = useState(initialInstallerEstimate);
@@ -146,7 +155,7 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
       return next;
     });
     setSelectedPiece(null);
-    if (["roomWidth", "roomLength", "tileWidth", "tileLength", "grout", "kerf", "orientation", "pattern"].includes(name)) setInstallerEstimate("");
+    if (["roomWidth", "roomLength", "tileWidth", "tileLength", "grout", "kerf", "orientation", "pattern", "layoutStart", "allowCutRotation"].includes(name)) setInstallerEstimate("");
     if (["tileWidth", "tileLength"].includes(name)) setCatalogItemId("");
     setSaveMessage("");
   }
@@ -196,7 +205,7 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
 
   return (
     <main id="main-content" className="room-planner-page">
-        <div className="planner-breadcrumb"><Link href={demoMode ? "/" : `/projects/${projectId}`}><ArrowLeft size={14} /> BACK TO {demoMode ? "HOME" : "PROJECT"}</Link><span>{demoMode ? "INTERACTIVE DEMO" : roomPlanId ? "EDIT SAVED PLAN" : "NEW ROOM PLAN"}</span></div>
+        <div className="planner-breadcrumb"><Link href={demoMode ? "/" : `/projects/${projectId}`}>Back to {demoMode ? "home" : "project"}</Link><span>{demoMode ? "INTERACTIVE DEMO" : roomPlanId ? "EDIT SAVED PLAN" : "NEW SURFACE PLAN"}</span></div>
         <section className="hero">
           <div className="hero-copy">
             <div className="eyebrow"><span className="eyebrow-chip">INSTALLATION PLAN</span><span>POLYGON ROOMS · MULTIPLE PATTERNS</span></div>
@@ -212,11 +221,11 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
           <div className="hero-index" aria-hidden="true">TL<span>—</span>26</div>
         </section>
 
-        <div id="planner" className="section-bar"><div><span className="section-index">01</span><span>PLAN YOUR ROOM</span></div><span className="section-bar-note"><ShieldCheck size={14} /> GEOMETRY · PATTERN · KERF</span></div>
+        <div id="planner" className="section-bar"><div><span className="section-index">01</span><span>PLAN A SURFACE</span></div><span className="section-bar-note">GEOMETRY · PATTERN · KERF</span></div>
 
         <section className="planner-grid">
           <aside className="control-panel">
-            <div className="panel-title-row"><div><span className="field-kicker">INPUTS / MILLIMETERS</span><h2>Room setup</h2></div><button className="icon-text-button" type="button" onClick={() => { const originalProduct = catalogItems.find((item) => item.id === initialCatalogItemId); setForm({ ...DEFAULT_FORM, ...initialForm }); setInstallerEstimate(initialInstallerEstimate); setInstallerNote(""); setSelectedPiece(null); setCatalogItemId(initialCatalogItemId || ""); setCatalogSearch(originalProduct ? catalogLabel(originalProduct) : ""); setSaveMessage(""); }}><RotateCcw size={13} /> Reset</button></div>
+            <div className="panel-title-row"><div><span className="field-kicker">INPUTS / MILLIMETERS</span><h2>Surface setup</h2></div><button className="text-button" type="button" onClick={() => { const originalProduct = catalogItems.find((item) => item.id === initialCatalogItemId); setForm({ ...DEFAULT_FORM, ...initialForm }); setInstallerEstimate(initialInstallerEstimate); setInstallerNote(""); setSelectedPiece(null); setCatalogItemId(initialCatalogItemId || ""); setCatalogSearch(originalProduct ? catalogLabel(originalProduct) : ""); setSaveMessage(""); }}>Reset inputs</button></div>
 
               <label className="input-label" htmlFor="plan-id">Room plan ID <span>24 CHARACTERS MAX</span></label>
             <input id="plan-id" className="text-control" value={form.planId} maxLength={24} onChange={(event) => updateField("planId", event.target.value)} placeholder="UAE-01" />
@@ -238,7 +247,7 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
             <div className="catalog-picker">
               <label className="visually-hidden" htmlFor="catalog-search">Search supplier catalog</label>
               <input id="catalog-search" className="text-control" type="search" value={catalogSearch} onChange={(event) => { setCatalogSearch(event.target.value); setCatalogItemId(""); setForm((current) => ({ ...current, tilesPerCarton: "" })); setInstallerEstimate(""); }} placeholder="Search brand, collection, color, or code" />
-              {catalogItemId && selectedCatalogItem && <div className="catalog-selected"><strong>{catalogLabel(selectedCatalogItem)}</strong><span>{selectedCatalogItem.width_mm} × {selectedCatalogItem.height_mm} mm{selectedCatalogItem.thickness_mm ? ` · ${selectedCatalogItem.thickness_mm} mm thick` : ""} · {selectedCatalogItem.supplier_code}</span><span>{selectedCatalogItem.tiles_per_carton == null ? "Carton size unavailable" : `${selectedCatalogItem.tiles_per_carton} tiles/carton`} · {selectedCatalogItem.price_amount == null ? "Price unavailable" : `${formatNumber(Number(selectedCatalogItem.price_amount))} ${selectedCatalogItem.price_currency} / ${selectedCatalogItem.price_unit}`} · {selectedCatalogItem.stock_quantity == null ? "Stock unavailable" : `${selectedCatalogItem.stock_quantity} ${selectedCatalogItem.stock_unit} in stock`}</span>{selectedCatalogItem.ordering_status === "orderable" ? <small>Supplier facts verified {selectedCatalogItem.facts_verified_at ? new Date(selectedCatalogItem.facts_verified_at).toLocaleDateString() : ""}. Confirm current availability before purchase.</small> : <small>Planning only — supplier facts are not approved for ordering.</small>}<button className="icon-text-button" type="button" onClick={clearCatalogItem}>Use custom size</button></div>}
+              {catalogItemId && selectedCatalogItem && <div className="catalog-selected"><strong>{catalogLabel(selectedCatalogItem)}</strong><span>{selectedCatalogItem.width_mm} × {selectedCatalogItem.height_mm} mm{selectedCatalogItem.thickness_mm ? ` · ${selectedCatalogItem.thickness_mm} mm thick` : ""} · {selectedCatalogItem.supplier_code}</span><span>{selectedCatalogItem.tiles_per_carton == null ? "Carton size unavailable" : `${selectedCatalogItem.tiles_per_carton} tiles/carton`} · {selectedCatalogItem.price_amount == null ? "Price unavailable" : `${formatNumber(Number(selectedCatalogItem.price_amount))} ${selectedCatalogItem.price_currency} / ${selectedCatalogItem.price_unit}`} · {selectedCatalogItem.stock_quantity == null ? "Stock unavailable" : `${selectedCatalogItem.stock_quantity} ${selectedCatalogItem.stock_unit} in stock`}</span>{selectedCatalogItem.ordering_status === "orderable" ? <small>Supplier facts verified {selectedCatalogItem.facts_verified_at ? new Date(selectedCatalogItem.facts_verified_at).toLocaleDateString() : ""}. Confirm current availability before purchase.</small> : <small>Planning only — supplier facts are not approved for ordering.</small>}<button className="text-inline-button" type="button" onClick={clearCatalogItem}>Use custom size</button></div>}
               {!catalogItemId && catalogSearch.trim().length >= 2 && <div className="catalog-search-results" role="listbox" aria-label="Catalog matches">
                 {filteredCatalogItems.map((item) => <button className="catalog-option" key={item.id} type="button" role="option" aria-selected="false" onClick={() => chooseCatalogItem(item)}><strong>{catalogLabel(item)}</strong><span>{item.width_mm} × {item.height_mm} mm · {item.supplier_code}</span></button>)}
                 {!filteredCatalogItems.length && <p className="catalog-empty">No published formats match that search.</p>}
@@ -258,10 +267,15 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
             <p className="microcopy">Use the measured blade kerf. The nesting estimate conservatively reserves it on each cut dimension.</p>
 
             <label className="input-label select-label" htmlFor="pattern">Installation pattern</label>
-            <div className="select-shell"><select id="pattern" value={form.pattern || "straight"} onChange={(event) => updateField("pattern", event.target.value)}><option value="straight">Straight lay</option><option value="half-offset">Half-offset (50%)</option><option value="diagonal">Diagonal (45°)</option><option value="herringbone">Herringbone 90° (2:1 tile)</option></select><ChevronDown size={15} /></div>
+            <div className="select-shell"><select id="pattern" value={form.pattern || "straight"} onChange={(event) => updateField("pattern", event.target.value)}><option value="straight">Straight lay</option><option value="half-offset">Half-offset (50%)</option><option value="third-offset">One-third offset</option><option value="two-thirds-offset">Two-thirds offset</option><option value="diagonal">Diagonal (45°)</option><option value="herringbone">Herringbone 90° (2:1 tile)</option></select></div>
+
+            <label className="input-label select-label" htmlFor="layout-start">Layout starting point</label>
+            <div className="select-shell"><select id="layout-start" aria-label="Layout starting point" value={form.layoutStart || "centered"} onChange={(event) => updateField("layoutStart", event.target.value)}><option value="centered">Center the pattern</option><option value="top-left">Start at top-left of room bounds</option></select></div>
+
+            <label className="cut-rotation-option"><input type="checkbox" checked={form.allowCutRotation === true} onChange={(event) => updateField("allowCutRotation", event.target.checked)} /><span><strong>Allow cut rotation on stock</strong><small>Rectangle cuts only. Turn on only for non-directional tile; grain, print, and finish may restrict rotation.</small></span></label>
 
             <label className="input-label select-label" htmlFor="orientation">Tile direction{form.pattern === "herringbone" && <span>SET BY PATTERN</span>}</label>
-            <div className="select-shell"><select id="orientation" disabled={form.pattern === "herringbone"} value={form.orientation} onChange={(event) => updateField("orientation", event.target.value)}><option value="standard">Tile width across room width</option><option value="rotated">Rotate tile 90°</option></select><ChevronDown size={15} /></div>
+            <div className="select-shell"><select id="orientation" disabled={form.pattern === "herringbone"} value={form.orientation} onChange={(event) => updateField("orientation", event.target.value)}><option value="standard">Tile width across room width</option><option value="rotated">Rotate tile 90°</option></select></div>
 
             <div className="control-section-heading buffer-heading"><span>Order buffer</span><span>BREAKAGE / REPAIR</span></div>
             <div className="range-line"><input aria-label="Order buffer percent" type="range" min="0" max="20" step="1" value={form.reserve} onChange={(event) => updateField("reserve", Number(event.target.value))} style={{ "--range-fill": `${Number(form.reserve) * 5}%` }} /><strong>{formatNumber(Number(form.reserve) || 0)}<small>%</small></strong></div>
@@ -270,10 +284,10 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
             <label className="input-unit carton-unit"><span>Tiles per carton <small>OPTIONAL · VERIFY PACK LABEL</small></span><div><input aria-label="Tiles per carton" type="number" min="1" max="1000" step="1" value={form.tilesPerCarton} onChange={(event) => updateField("tilesPerCarton", event.target.value)} placeholder="Not provided" /><b>tiles</b></div></label>
             <p className="microcopy">Carton rounding uses this user-entered value only; catalog pack sizes are currently unverified.</p>
 
-            {plan.error && <div className="validation-error" role="alert"><TriangleAlert size={14} /><span>{plan.error}</span></div>}
-            <div className="assumption-card"><CircleHelp size={15} /><p><strong>{validPlan?.geometryMode ? "Polygon-clipped layout." : "Rectangular room layout."}</strong> {validPlan?.geometryMode ? "Cut-piece bounds are conservatively packed with kerf; reuse candidates require a bounding-box fit and still need installer review." : "The selected pattern places tiles on a centered grid; no perimeter grout is added. Tile dimensions are finished stock dimensions."}</p></div>
-            {validPlan?.layoutWarnings?.map((warning) => <div className="layout-warning" role="status" key={warning}><TriangleAlert size={13} /><span>{warning}</span></div>)}
-            {demoMode ? <div className="save-plan-panel demo-save-panel"><span className="field-kicker">DEMO MODE / READ ONLY</span><p>Start a private project to save plans, compare installer estimates, and record actual installation outcomes.</p><Link className="save-plan-button" href="/signup">Create an account <ArrowRight size={14} /></Link></div> : <div className="save-plan-panel">
+            {plan.error && <div className="validation-error" role="alert"><span>{plan.error}</span></div>}
+            <div className="assumption-card"><p><strong>{validPlan?.geometryMode ? "Polygon-clipped layout." : "Rectangular room layout."}</strong> {validPlan?.geometryMode ? "Cut-piece bounds are conservatively packed with kerf; reuse candidates require a bounding-box fit and still need installer review." : `The pattern uses ${form.layoutStart === "top-left" ? "a top-left starting point" : "a centered grid"}; no perimeter grout is added. Tile dimensions are finished stock dimensions.`} {form.allowCutRotation ? "Rectangular cut pieces may rotate on stock; verify product direction before cutting." : "Cut pieces keep the entered stock direction."}</p></div>
+            {validPlan?.layoutWarnings?.map((warning) => <div className="layout-warning" role="status" key={warning}><span>{warning}</span></div>)}
+            {demoMode ? <div className="save-plan-panel demo-save-panel"><span className="field-kicker">DEMO MODE / READ ONLY</span><p>Start a private project to save plans, compare installer estimates, and record actual installation outcomes.</p><Link className="save-plan-button" href="/signup">Create an account</Link></div> : <div className="save-plan-panel">
               <span className="field-kicker">SAVE TO PROJECT</span>
               <label className="input-label" htmlFor="installer-estimate">Installer estimate <span>OPTIONAL · WHOLE TILES</span></label>
               <input id="installer-estimate" className="text-control" type="number" min="1" max="100000" step="1" value={installerEstimate} onChange={(event) => { setInstallerEstimate(event.target.value); setSaveMessage(""); }} placeholder="Enter a comparable order count" />
@@ -282,22 +296,23 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
               <label className="input-label" htmlFor="installer-note">Comparison note <span>OPTIONAL</span></label>
               <textarea id="installer-note" className="text-control note-control" maxLength={1000} value={installerNote} onChange={(event) => setInstallerNote(event.target.value)} placeholder="Same room, tile, units, and site assumptions" />
               {saveMessage && <p className="save-plan-message" role="status">{saveMessage}</p>}
-              <button className="save-plan-button" type="button" onClick={savePlan} disabled={!validPlan || isSaving || installerEstimateInvalid || installerEstimateBelowFloor}>{isSaving ? "Saving calculation…" : roomPlanId ? "Save new calculation version" : "Save room plan"}<ArrowRight size={14} /></button>
+              <button className="save-plan-button" type="button" onClick={savePlan} disabled={!validPlan || isSaving || installerEstimateInvalid || installerEstimateBelowFloor}>{isSaving ? "Saving calculation…" : roomPlanId ? "Save new calculation version" : "Save surface plan"}</button>
               <p className="microcopy">Each save records an immutable calculation snapshot and algorithm version. Estimates below the area-only minimum are rejected.</p>
             </div>}
           </aside>
 
-          <section className="model-panel" aria-label={modelView === "3d" ? "Interactive three-dimensional tile layout" : "Interactive two-dimensional tile layout"}>
+          <div className="plan-output-column">
+          <section id="plan-view" className="model-panel" aria-label={modelView === "3d" ? "Interactive three-dimensional tile layout" : "Interactive two-dimensional tile layout"}>
             <div className="model-topbar"><div><span className="field-kicker">MODEL / {validPlan ? validPlan.planId : "WAITING FOR INPUT"}</span><h2>Room in {modelView === "3d" ? "3D" : "2D"}<span className="cyan-period">.</span></h2></div>
-              <div className="model-actions"><div className="model-view-switch" role="group" aria-label="Choose plan view"><button type="button" aria-pressed={modelView === "2d"} onClick={() => setModelView("2d")}>2D</button><button type="button" aria-pressed={modelView === "3d"} onClick={() => setModelView("3d")}>3D</button></div>{modelView === "3d" && <div className="live-model-pill"><span /> INTERACTIVE</div>}<button className="square-button" type="button" onClick={() => exportPlanSvg(validPlan)} disabled={!validPlan} title="Download numbered 2D plan as SVG" aria-label="Download plan as SVG"><ArrowDownToLine size={17} /></button></div>
+              <div className="model-actions"><div className="model-view-switch" role="group" aria-label="Choose plan view"><button type="button" aria-pressed={modelView === "2d"} onClick={() => setModelView("2d")}>2D</button><button type="button" aria-pressed={modelView === "3d"} onClick={() => setModelView("3d")}>3D</button></div><button className="text-button" type="button" onClick={() => exportPlanSvg(validPlan)} disabled={!validPlan}>SVG plan</button><button className="text-button" type="button" onClick={() => downloadText(`${validPlan.planId.replace(/[^a-z0-9_-]/gi, "-")}-cut-list.csv`, cutListToCsv(validPlan), "text/csv;charset=utf-8")} disabled={!validPlan}>CSV cut list</button><button className="text-button" type="button" onClick={() => printCutList(validPlan)} disabled={!validPlan}>Print / PDF</button></div>
             </div>
             <div className="model-viewport">
               {validPlan ? modelView === "3d"
                 ? <RoomScene plan={validPlan} selectedPieceNumber={activePiece?.number ?? null} onPieceSelect={onPieceSelect} />
                 : <RoomPlan2D plan={validPlan} selectedPieceNumber={activePiece?.number ?? null} onPieceSelect={onPieceSelect} />
-                : <div className="model-error"><TriangleAlert size={18} /> Fix the room and tile inputs to build the model.</div>}
+                : <div className="model-error">Fix the room and tile inputs to build the model.</div>}
               {validPlan && <div className={`selection-overlay ${activePiece ? "piece-is-selected" : ""}`} aria-live="polite">
-                {activePiece ? <><span className="selection-type">{activePiece.full ? "FULL TILE" : "CUT PIECE"} · {activePiece.id || `#${activePiece.number}`}</span><strong>{formatNumber(activePiece.w)} × {formatNumber(activePiece.h)} <small>mm max bounds</small></strong><button type="button" onClick={() => setSelectedPiece(null)} aria-label="Clear selected tile">×</button></> : <><span>CLICK ANY TILE</span><small>to inspect piece size and ID</small></>}
+                {activePiece ? <><span className="selection-type">{activePiece.full ? "FULL TILE" : "CUT PIECE"} · {activePiece.id || `#${activePiece.number}`}</span><strong>{formatNumber(activePiece.w)} × {formatNumber(activePiece.h)} <small>mm max bounds</small></strong><button type="button" onClick={() => setSelectedPiece(null)}>Clear selection</button></> : <><span>SELECT A TILE</span><small>to inspect piece size and ID</small></>}
               </div>}
             </div>
             <div className="model-caption">
@@ -305,34 +320,36 @@ export default function RoomPlanEditor({ projectId, roomPlanId = null, initialFo
               <div className="model-caption-right">{activePiece ? <><b>PIECE {activePiece.number}</b><span>{formatNumber(activePiece.w)} × {formatNumber(activePiece.h)} mm</span></> : <><b>ROOM GRID</b><span>{validPlan ? `${validPlan.columns.length} cols × ${validPlan.rows.length} rows` : "—"}</span></>}</div>
             </div>
           </section>
-        </section>
 
-        <section className="metrics-grid" aria-label="Plan estimate">
-          <article className="metric-card metric-primary"><div className="metric-top"><span>SUGGESTED ORDER</span><ArrowRight size={15} /></div><div className="metric-value">{validPlan ? (validPlan.cartonsToOrder || validPlan.orderQuantity) : "—"}<small>{validPlan?.cartonsToOrder ? "cartons" : "tiles"}</small></div><div className="metric-bottom"><span>{validPlan?.cartonsToOrder ? `${validPlan.tilesToOrder} tiles · ${validPlan.orderQuantity} after buffer` : `includes ${form.reserve}% buffer`}</span><span className="cyan-tag">ESTIMATE</span></div><div className="metric-accent-line" /></article>
-          <article className="metric-card"><div className="metric-top"><span>CUT PLAN</span><Layers3 size={15} /></div><div className="metric-value">{validPlan ? validPlan.stockTiles : "—"}<small>tiles</small></div><div className="metric-bottom"><span>{validPlan ? `${validPlan.fullCount} full · ${validPlan.cutPieces.length} cut pieces` : "—"}</span><span>{validPlan ? `${validPlan.pieces.length} pieces` : ""}</span></div></article>
-          <article className="metric-card"><div className="metric-top"><span>OFFCUT CANDIDATES</span><Rotate3D size={15} /></div><div className="metric-value">{validPlan ? validPlan.remnantCount : "—"}<small>pieces</small></div><div className="metric-bottom"><span>both sides ≥ 150 mm</span><span>{validPlan ? formatArea(validPlan.remnantArea) : "—"}</span></div></article>
+        <section id="estimate" className="metrics-grid" aria-label="Plan estimate">
+          <article className="metric-card metric-primary"><div className="metric-top"><span>SUGGESTED ORDER</span></div><div className="metric-value">{validPlan ? (validPlan.cartonsToOrder || validPlan.orderQuantity) : "—"}<small>{validPlan?.cartonsToOrder ? "cartons" : "tiles"}</small></div><div className="metric-bottom"><span>{validPlan?.cartonsToOrder ? `${validPlan.tilesToOrder} tiles · ${validPlan.orderQuantity} after buffer` : `includes ${form.reserve}% buffer`}</span><span className="cyan-tag">ESTIMATE</span></div><div className="metric-accent-line" /></article>
+          <article className="metric-card"><div className="metric-top"><span>PRACTICAL STOCK PLAN</span></div><div className="metric-value">{validPlan ? validPlan.stockTiles : "—"}<small>tiles</small></div><div className="metric-bottom"><span>{validPlan ? `${validPlan.fullCount} full · ${validPlan.cutPieces.length} cut pieces` : "—"}</span><span>{validPlan ? `${validPlan.pieces.length} pieces` : ""}</span></div></article>
+          <article className="metric-card"><div className="metric-top"><span>AREA-ONLY LOWER BOUND</span></div><div className="metric-value">{validPlan ? minimumTilesByArea(validPlan) : "—"}<small>tiles</small></div><div className="metric-bottom"><span>Does not include cut or kerf losses</span><span>REFERENCE</span></div></article>
+          <article className="metric-card"><div className="metric-top"><span>OFFCUT CANDIDATES</span></div><div className="metric-value">{validPlan ? validPlan.remnantCount : "—"}<small>pieces</small></div><div className="metric-bottom"><span>both sides ≥ 150 mm</span><span>{validPlan ? formatArea(validPlan.remnantArea) : "—"}</span></div></article>
         </section>
 
         <section className="detail-grid">
-          <article className="detail-card cut-schedule-card">
+          <article id="cut-list" className="detail-card cut-schedule-card">
             <div className="detail-heading"><div><span className="field-kicker">CUT MAP / PIECE SCHEDULE</span><h2>Every edge, accounted for.</h2></div><span className="table-count">{validPlan ? `${validPlan.schedule.length} piece types` : "—"}</span></div>
             <div className="schedule-table-wrap"><table className="schedule-table"><thead><tr><th>TYPE</th><th>QTY</th><th>PIECE SIZE <span>W × L</span></th><th>LOCATION</th></tr></thead><tbody>
               {validPlan?.schedule.map((piece, index) => <tr key={`${piece.w}-${piece.h}-${piece.full}-${index}`}><td><span className={`piece-mark ${piece.full ? "piece-full" : "piece-cut"}`} />{piece.full ? "Full tile" : piece.shape === "polygon" ? "Shaped cut" : "Cut piece"}{piece.pieceIds?.length > 0 && <details className="piece-id-details"><summary>{piece.qty} piece IDs</summary><code>{piece.pieceIds.join(", ")}</code></details>}</td><td>{piece.qty}</td><td>{formatNumber(piece.w)} × {formatNumber(piece.h)} mm{piece.shape === "polygon" ? " max bounds" : ""}</td><td>{formatLocation(piece.locations)}</td></tr>)}
               {!validPlan && <tr><td className="empty-row" colSpan="4">Valid dimensions will generate a numbered cut schedule.</td></tr>}
             </tbody></table></div>
-            <div className="table-foot"><span><Scissors size={13} /> {validPlan ? validPlan.geometryMode ? `${validPlan.cutPaths} polygon cut profiles` : `${validPlan.cutEdges} estimated cut edges` : "—"}</span><span>Select a piece in either view to inspect its ID and dimensions.</span></div>
+            <div className="table-foot"><span>{validPlan ? validPlan.geometryMode ? `${validPlan.cutPaths} polygon cut profiles` : `${validPlan.cutEdges} estimated cut edges` : "—"}</span><span>Select a piece in either view to inspect its ID and dimensions.</span></div>
           </article>
 
           <article className="detail-card offcut-card">
-            <div className="detail-heading"><div><span className="field-kicker">MATERIAL / KEEP IN USE</span><h2>Remnants worth a look.</h2></div><span className="reuse-arrow">↗</span></div>
+            <div className="detail-heading"><div><span className="field-kicker">MATERIAL / KEEP IN USE</span><h2>Remnants worth a look.</h2></div></div>
             <p className="detail-description">Rectangular stock-tile areas left after nesting every room piece. Installer checks final suitability.</p>
             <div className="offcut-stack">
               {validPlan?.remnants.slice(0, 5).map((entry, index) => <div className="offcut-entry" key={entry.id || `${entry.w}-${entry.h}-${index}`}><OffcutShape entry={entry} plan={validPlan} /><span className="offcut-size">{formatNumber(entry.w)} × {formatNumber(entry.h)} <i>mm</i></span><span className="offcut-quantity">×{entry.qty}</span>{entry.reuseCandidates?.length > 0 && <small className="offcut-reuse">Bounding-box fit candidates: {entry.reuseCandidates.flatMap((candidate) => candidate.pieceIds || []).join(", ")}</small>}</div>)}
               {validPlan && validPlan.remnantCount === 0 && <div className="offcut-empty">No remaining rectangle meets 150 × 150 mm in this nesting estimate.</div>}
               {!validPlan && <div className="offcut-empty">Offcut candidates appear when the room dimensions are valid.</div>}
             </div>
-            <div className="estimate-note"><Scissors size={13} /><span>Repeatable guillotine estimate. Kerf is conservatively reserved; breakage and site cutting order can still change reuse.</span></div>
+            <div className="estimate-note"><span>Repeatable guillotine estimate. Kerf is conservatively reserved; breakage and site cutting order can still change reuse.</span></div>
           </article>
+        </section>
+          </div>
         </section>
 
         {roomPlanId && <section className="snapshot-history">

@@ -109,7 +109,11 @@ export async function deleteAccountAction(_previousState, formData) {
 
   const { error: deletionError } = await admin.auth.admin.deleteUser(auth.claims.sub);
   if (deletionError) {
-    console.error("Account deletion failed:", deletionError.status || "unknown");
+    console.error("Account deletion failed:", {
+      status: deletionError.status || null,
+      code: deletionError.code || null,
+      message: deletionError.message || "No details",
+    });
     return { error: "Account deletion failed. No project data was intentionally removed; contact support." };
   }
 

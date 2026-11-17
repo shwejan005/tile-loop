@@ -18,7 +18,9 @@ const inputSchema = z.object({
   grout: z.coerce.number().finite(),
   kerf: z.coerce.number().finite(),
   orientation: z.enum(["standard", "rotated"]),
-  pattern: z.enum(["straight", "half-offset", "diagonal", "herringbone"]).default("straight"),
+  pattern: z.enum(["straight", "half-offset", "third-offset", "two-thirds-offset", "diagonal", "herringbone"]).default("straight"),
+  layoutStart: z.enum(["centered", "top-left"]).default("centered"),
+  allowCutRotation: z.boolean().default(false),
   tilesPerCarton: z.union([z.literal(""), z.coerce.number().int().min(1).max(1000)]).default(""),
   roomGeometry: z.unknown().nullable().optional(),
   reserve: z.coerce.number().finite(),
@@ -38,13 +40,24 @@ const optionalPositiveInteger = (maximum) => z.union([
   z.coerce.number().int().min(1).max(maximum),
 ]).default("");
 
+const offcutEntrySchema = z.object({
+  widthMm: z.coerce.number().finite().min(1).max(3000),
+  lengthMm: z.coerce.number().finite().min(1).max(3000),
+  quantity: z.coerce.number().int().min(1).max(100000),
+}).strict();
+
 const outcomeSchema = z.object({
   projectId: uuidSchema,
   roomPlanId: uuidSchema,
   actualTilesUsed: z.coerce.number().int().min(1).max(100000),
+  confirmConsumptionBasis: z.boolean().default(false),
   breakageTiles: z.union([z.literal(""), z.coerce.number().int().min(0).max(100000)]).default(""),
   laborMinutes: optionalPositiveInteger(100000),
   practicalityRating: z.union([z.literal(""), z.coerce.number().int().min(1).max(5)]).default(""),
+  installerLabel: z.string().trim().max(80).default(""),
+  actualTilesInstalled: z.union([z.literal(""), z.coerce.number().int().min(0).max(100000)]).default(""),
+  reusableOffcuts: z.array(offcutEntrySchema).max(100).default([]),
+  discardedOffcuts: z.array(offcutEntrySchema).max(100).default([]),
   note: z.string().trim().max(1000).default(""),
 }).strict();
 
@@ -84,6 +97,7 @@ function buildResultSummary(plan) {
       h: piece.h,
       areaMm2: piece.areaMm2 ?? piece.w * piece.h,
       full: piece.full,
+      stockRotated: piece.stockRotated === true,
       shape: piece.shape || "rectangle",
       location: piece.location,
       geometry: piece.geometry || null,
@@ -121,8 +135,9 @@ async function persistRoomPlan(auth, { projectId, roomPlanId, catalogItemId = nu
     layout: {
       pattern: plan.pattern,
       strategyVersion: plan.patternStrategyVersion,
-      alignment: "centered",
+      alignment: plan.layoutStart,
       orientation: form.orientation,
+      allowCutRotation: plan.allowCutRotation,
     },
     tileWidthMm: Number(form.tileWidth),
     tileLengthMm: Number(form.tileLength),
@@ -243,9 +258,13 @@ export async function saveInstallationOutcomeAction(untrustedInput) {
 
   const parsed = outcomeSchema.safeParse(untrustedInput);
   if (!parsed.success) return { error: "Enter a valid actual tile count and check the optional outcome fields." };
-  const { projectId, roomPlanId, actualTilesUsed, breakageTiles, laborMinutes, practicalityRating, note } = parsed.data;
+  const { projectId, roomPlanId, actualTilesUsed, actualTilesInstalled, reusableOffcuts, discardedOffcuts, installerLabel, confirmConsumptionBasis, breakageTiles, laborMinutes, practicalityRating, note } = parsed.data;
   if (breakageTiles !== "" && breakageTiles > actualTilesUsed) {
     return { error: "Breakage cannot exceed the total tiles used." };
+  }
+  const breakageCount = breakageTiles === "" ? 0 : breakageTiles;
+  if (actualTilesInstalled !== "" && actualTilesInstalled + breakageCount > actualTilesUsed) {
+    return { error: "Installed tiles plus broken tiles cannot exceed total tiles consumed." };
   }
 
   const { data: roomPlan, error: roomPlanError } = await auth.supabase
@@ -265,14 +284,29 @@ export async function saveInstallationOutcomeAction(untrustedInput) {
     .maybeSingle();
   if (snapshotError || !snapshot) return { error: "Save a room calculation before recording its installation outcome." };
 
+  const { data: priorOutcome, error: priorOutcomeError } = await auth.supabase
+    .from("installation_outcomes")
+    .select("consumption_basis")
+    .eq("plan_snapshot_id", snapshot.id)
+    .maybeSingle();
+  if (priorOutcomeError) return { error: "Could not verify the saved outcome definition. Try again." };
+  if (priorOutcome?.consumption_basis === "legacy-unknown" && !confirmConsumptionBasis) {
+    return { error: "Confirm whether this saved count includes broken tiles before updating it." };
+  }
+
   const { error } = await auth.supabase
     .from("installation_outcomes")
     .upsert({
       plan_snapshot_id: snapshot.id,
       actual_tiles_used: actualTilesUsed,
+      actual_tiles_installed: actualTilesInstalled === "" ? null : actualTilesInstalled,
+      consumption_basis: "consumed-including-breakage-v1",
       breakage_tiles: breakageTiles === "" ? null : breakageTiles,
       labor_minutes: laborMinutes === "" ? null : laborMinutes,
       practicality_rating: practicalityRating === "" ? null : practicalityRating,
+      installer_label: installerLabel || null,
+      reusable_offcuts: reusableOffcuts,
+      discarded_offcuts: discardedOffcuts,
       note: note || null,
       completed_at: new Date().toISOString(),
     }, { onConflict: "plan_snapshot_id" });

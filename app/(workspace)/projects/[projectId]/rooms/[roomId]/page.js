@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import RoomPlanEditor from "../../../../../../components/RoomPlanEditor.jsx";
 import InstallationOutcomeForm from "../../../../../../components/InstallationOutcomeForm.jsx";
 import DeleteResourceButton from "../../../../../../components/DeleteResourceButton.jsx";
@@ -36,6 +35,8 @@ export default async function RoomPlanPage({ params }) {
     reserve: Number(plan.reserve_pct),
     roomGeometry: plan.latestSnapshot?.inputs?.roomGeometry || null,
     pattern: plan.latestSnapshot?.inputs?.layout?.pattern || DEFAULT_FORM.pattern,
+    layoutStart: plan.latestSnapshot?.inputs?.layout?.alignment || DEFAULT_FORM.layoutStart,
+    allowCutRotation: plan.latestSnapshot?.inputs?.layout?.allowCutRotation === true,
     tilesPerCarton: plan.latestSnapshot?.inputs?.tilesPerCarton ?? "",
   };
   const savedComparisons = plan.latestSnapshot?.installer_comparisons;
@@ -45,7 +46,7 @@ export default async function RoomPlanPage({ params }) {
 
   return (
     <>
-      <div className="workspace-breadcrumb"><Link href={`/projects/${project.id}`}><ArrowLeft size={14} /> {project.name}</Link><span>/</span><span>{plan.label} · {formatNumber(plan.room_width_mm)} × {formatNumber(plan.room_length_mm)} mm</span></div>
+      <div className="workspace-breadcrumb"><Link href={`/projects/${project.id}`}>{project.name}</Link><span>/</span><span>{plan.label} · {formatNumber(plan.room_width_mm)} × {formatNumber(plan.room_length_mm)} mm</span></div>
       <RoomPlanEditor
         projectId={project.id}
         roomPlanId={plan.id}
@@ -58,7 +59,8 @@ export default async function RoomPlanPage({ params }) {
       {plan.latestSnapshot && <InstallationOutcomeForm
         projectId={project.id}
         roomPlanId={plan.id}
-        estimatedTiles={plan.latestSnapshot.result_summary?.orderQuantity ?? null}
+        plannedStockTiles={plan.latestSnapshot.result_summary?.stockTiles ?? null}
+        suggestedOrderTiles={plan.latestSnapshot.result_summary?.orderQuantity ?? null}
         initialOutcome={latestOutcome || null}
       />}
       <div className="room-delete-action"><DeleteResourceButton type="room" projectId={project.id} roomPlanId={plan.id} label={plan.label} /></div>

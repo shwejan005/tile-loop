@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
 import { createRectangularRoomGeometry, normalizeRoomGeometry, roomGeometryBounds, validateRoomGeometry } from "../lib/geometry/room.js";
 
 function rectangleRing(x, y, width, length) {
@@ -115,6 +114,12 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
     return { index, start: point, end: next, length: Math.hypot(dx, dy) };
   }) || [];
   const geometryError = geometry ? validateRoomGeometry(geometry) : null;
+  const obstacleCount = activeGeometry.zones.reduce((count, zone) => count + (zone.obstacles || []).length, 0);
+  const openingCount = activeGeometry.zones.reduce((count, zone) => count + (zone.openings || []).length, 0);
+  const doorwayCount = activeGeometry.zones.reduce((count, zone) => count + (zone.accessPoints || []).length, 0);
+  const geometrySummary = geometryError
+    ? "Needs correction"
+    : `${mode === "rectangle" ? "Rectangle" : mode === "l-shape" ? "L-shaped room" : "Custom outline"} · ${activeGeometry.zones.length} ${activeGeometry.zones.length === 1 ? "area" : "areas"} · ${obstacleCount} ${obstacleCount === 1 ? "obstacle" : "obstacles"} · ${openingCount} ${openingCount === 1 ? "opening" : "openings"} · ${doorwayCount} ${doorwayCount === 1 ? "doorway" : "doorways"}`;
   const traceImageBounds = useMemo(() => {
     if (!traceImageSize) return null;
     const scale = Math.min(400 / traceImageSize.width, 260 / traceImageSize.height);
@@ -328,8 +333,14 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
   }
 
   return (
-    <section className="geometry-editor" aria-label="Room geometry">
-      <div className="geometry-editor-heading"><div><strong>Room geometry</strong><span>BOUNDARIES / MM</span></div><RoomPreview geometry={geometry} widthMm={widthMm} lengthMm={lengthMm} /></div>
+    <>
+    <details className="geometry-editor">
+      <summary className="geometry-editor-heading">
+        <div><strong>Room geometry</strong><span>{geometrySummary}</span></div>
+        <RoomPreview geometry={geometry} widthMm={widthMm} lengthMm={lengthMm} />
+        <span className="geometry-disclosure-action">Edit geometry</span>
+      </summary>
+      <div className="geometry-editor-content">
       <label className="input-label" htmlFor="room-shape-mode">Room outline <span>PLANNER SUPPORTS POLYGONS</span></label>
       <select id="room-shape-mode" className="text-control" value={mode} onChange={(event) => chooseMode(event.target.value)}>
         <option value="rectangle">Rectangle</option>
@@ -369,7 +380,7 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
 
       {geometry && <>
         <div className="geometry-zone-list">
-          {activeGeometry.zones.map((zone, index) => <div className="geometry-zone-row" key={zone.id}><span>Area {index + 1}</span><small>{zone.boundary.length} boundary points</small>{activeGeometry.zones.length > 1 && <button type="button" aria-label={`Remove area ${index + 1}`} onClick={() => removeArea(zone.id)}><Trash2 size={12} /></button>}</div>)}
+          {activeGeometry.zones.map((zone, index) => <div className="geometry-zone-row" key={zone.id}><span>Area {index + 1}</span><small>{zone.boundary.length} boundary points</small>{activeGeometry.zones.length > 1 && <button type="button" aria-label={`Remove area ${index + 1}`} onClick={() => removeArea(zone.id)}>Remove</button>}</div>)}
         </div>
         <div className="geometry-add-area">
           <span className="field-kicker">ADD RECTANGULAR AREA</span>
@@ -381,7 +392,7 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
             <label className="input-unit"><span>Width</span><div><input aria-label="New area width mm" type="number" min="1" value={zoneWidth} onChange={(event) => setZoneWidth(event.target.value)} /><b>mm</b></div></label>
             <label className="input-unit"><span>Length</span><div><input aria-label="New area length mm" type="number" min="1" value={zoneLength} onChange={(event) => setZoneLength(event.target.value)} /><b>mm</b></div></label>
           </div>
-          <button className="geometry-action" type="button" onClick={addArea}><Plus size={13} /> Add area</button>
+          <button className="geometry-action" type="button" onClick={addArea}>Add area</button>
         </div>
 
         <div className="geometry-zone-controls">
@@ -398,11 +409,11 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
             <label className="input-unit"><span>Length</span><div><input aria-label="Feature length mm" type="number" min="1" value={featureLength} onChange={(event) => setFeatureLength(event.target.value)} /><b>mm</b></div></label>
           </div>
           <div className="geometry-feature-actions">
-            <button className="geometry-action" type="button" onClick={() => addRectangularFeature("obstacle")}><Plus size={13} /> Add column / obstacle</button>
-            <button className="geometry-action secondary" type="button" onClick={() => addRectangularFeature("opening")}><Plus size={13} /> Add floor opening</button>
+            <button className="geometry-action" type="button" onClick={() => addRectangularFeature("obstacle")}>Add column / obstacle</button>
+            <button className="geometry-action secondary" type="button" onClick={() => addRectangularFeature("opening")}>Add floor opening</button>
           </div>
           {activeGeometry.zones.map((zone) => <div className="geometry-feature-list" key={`${zone.id}-features`}>
-            {[...(zone.obstacles || []).map((item) => ({ ...item, collection: "obstacles", label: "Obstacle" })), ...(zone.openings || []).map((item) => ({ ...item, collection: "openings", label: "Opening" }))].map((item) => <div className="geometry-zone-row" key={item.id}><span>{item.label} · Area {activeGeometry.zones.findIndex((entry) => entry.id === zone.id) + 1}</span><small>{item.id}</small><button type="button" aria-label={`Remove ${item.label.toLowerCase()} ${item.id}`} onClick={() => removeFeature(zone.id, item.collection, item.id)}><Trash2 size={12} /></button></div>)}
+          {[...(zone.obstacles || []).map((item) => ({ ...item, collection: "obstacles", label: "Obstacle" })), ...(zone.openings || []).map((item) => ({ ...item, collection: "openings", label: "Opening" }))].map((item) => <div className="geometry-zone-row" key={item.id}><span>{item.label} · Area {activeGeometry.zones.findIndex((entry) => entry.id === zone.id) + 1}</span><small>{item.id}</small><button type="button" aria-label={`Remove ${item.label.toLowerCase()} ${item.id}`} onClick={() => removeFeature(zone.id, item.collection, item.id)}>Remove</button></div>)}
           </div>)}
 
           <div className="geometry-doorway-controls">
@@ -415,14 +426,16 @@ export default function RoomGeometryEditor({ geometry, widthMm, lengthMm, onChan
               <label className="input-unit"><span>Offset</span><div><input aria-label="Doorway offset mm" type="number" min="0" value={doorOffset} onChange={(event) => setDoorOffset(event.target.value)} /><b>mm</b></div></label>
               <label className="input-unit"><span>Width</span><div><input aria-label="Doorway width mm" type="number" min="1" value={doorWidth} onChange={(event) => setDoorWidth(event.target.value)} /><b>mm</b></div></label>
             </div>
-            <button className="geometry-action" type="button" onClick={addDoorway}><Plus size={13} /> Add doorway</button>
+            <button className="geometry-action" type="button" onClick={addDoorway}>Add doorway</button>
           </div>
-          {activeGeometry.zones.map((zone, zoneIndex) => (zone.accessPoints || []).map((item) => <div className="geometry-zone-row" key={item.id}><span>{item.kind} · Area {zoneIndex + 1}</span><small>{item.id}</small><button type="button" aria-label={`Remove doorway ${item.id}`} onClick={() => removeFeature(zone.id, "accessPoints", item.id)}><Trash2 size={12} /></button></div>))}
+          {activeGeometry.zones.map((zone, zoneIndex) => (zone.accessPoints || []).map((item) => <div className="geometry-zone-row" key={item.id}><span>{item.kind} · Area {zoneIndex + 1}</span><small>{item.id}</small><button type="button" aria-label={`Remove doorway ${item.id}`} onClick={() => removeFeature(zone.id, "accessPoints", item.id)}>Remove</button></div>))}
         </div>
       </>}
 
-      {(editorError || geometryError) && <p className="geometry-error" role="alert">{editorError || geometryError}</p>}
       <p className="microcopy">Openings and obstacles are clipped from the floor. Doorways mark wall access only; they do not remove floor area.</p>
-    </section>
+      </div>
+    </details>
+    {(editorError || geometryError) && <p className="geometry-error" role="alert">{editorError || geometryError}</p>}
+    </>
   );
 }

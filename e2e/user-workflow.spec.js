@@ -8,14 +8,58 @@ nextEnv.loadEnvConfig(process.cwd());
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
-const canUseLocalSupabase = Boolean(supabaseUrl && supabaseSecretKey);
+async function localServicesAreReady() {
+  if (!supabaseUrl || !supabaseSecretKey) return false;
+  let host;
+  try { host = new URL(supabaseUrl).hostname; } catch { return false; }
+  if (!new Set(["localhost", "127.0.0.1", "::1"]).has(host)) return false;
+  try {
+    const [apiResponse, mailResponse] = await Promise.all([
+      fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/`, { headers: { apikey: supabaseSecretKey } }),
+      fetch("http://127.0.0.1:54324/api/v1/messages"),
+    ]);
+    return apiResponse.ok && mailResponse.ok;
+  } catch {
+    return false;
+  }
+}
+const canUseLocalSupabase = await localServicesAreReady();
+const localSupabaseSkipReason = "Local Supabase and Mailpit are not reachable. Start and reset the local stack for authenticated E2E coverage.";
 const password = "TileLoopE2E!Secure2026";
+
+test("the landing page identifies TileLoop as B2B installer software with a read-only client role", async ({ browser }) => {
+  const page = await browser.newPage();
+  try {
+    await page.goto("/");
+    await expect(page.getByText("B2B / TILE INSTALLER SOFTWARE")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Tile installers and contractors" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Homeowners and project clients" })).toBeVisible();
+    await expect(page.getByText(/Pricing and packaging are not validated/)).toBeVisible();
+    await expect(page.getByLabel("Calculated sample plan preview")).toBeVisible();
+    await expect(page.getByRole("img", { name: /Sample L-shaped tile plan/ })).toBeVisible();
+    await expect(page.getByText("SUGGESTED ORDER")).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByText("B2B / TILE INSTALLER SOFTWARE")).toBeVisible();
+    const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(hasHorizontalOverflow).toBe(false);
+  } finally {
+    await page.close();
+  }
+});
 
 test("public demo lets visitors inspect a polygon plan without signing in", async ({ browser }) => {
   const page = await browser.newPage();
   try {
     await page.goto("/demo");
     await expect(page.getByText(/Sample L-shaped room/)).toBeVisible();
+    await expect(page.getByText("B2B INSTALLER WORKFLOW · INTERACTIVE DEMO")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Demo walkthrough" }).getByRole("link", { name: "Layout and cuts" })).toHaveAttribute("href", "#plan-view");
+    await expect(page.getByRole("heading", { name: /Room in 2D/ })).toBeVisible();
+    await expect(page.locator(".geometry-editor")).not.toHaveAttribute("open", "");
+    await expect(page.locator(".geometry-editor > summary")).toContainText("1 obstacle");
+    await expect(page.locator(".geometry-editor > summary")).toContainText("1 opening");
+    await expect(page.locator(".geometry-editor > summary")).toContainText("1 doorway");
+    await page.locator(".geometry-editor > summary").click();
     await page.getByLabel(/Trace from floor-plan image/).setInputFiles({
       name: "floor-plan.png",
       mimeType: "image/png",
@@ -30,13 +74,31 @@ test("public demo lets visitors inspect a polygon plan without signing in", asyn
     }
     await page.getByRole("button", { name: "Use traced outline" }).click();
     await expect(page.locator("#custom-room-boundary")).toHaveValue(/5200/);
+    await page.getByLabel("Installation pattern").selectOption("third-offset");
+    await expect(page.locator(".validation-error")).toHaveCount(0);
     await page.getByLabel("Installation pattern").selectOption("herringbone");
     await expect(page.locator(".validation-error")).toHaveCount(0);
     await expect(page.locator(".layout-warning")).toContainText("T-junctions");
+    const cutListDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "CSV cut list" }).click();
+    expect((await cutListDownload).suggestedFilename()).toMatch(/cut-list\.csv$/);
+    const printableCutList = page.waitForEvent("popup");
+    await page.getByRole("button", { name: "Print / PDF" }).click();
+    const printPage = await printableCutList;
+    await expect(printPage).toHaveTitle(/TileLoop cut list/);
+    await expect(printPage.locator("svg.plan")).toBeVisible();
+    await expect(printPage.getByRole("columnheader", { name: "Source tile" })).toBeVisible();
     await page.getByRole("button", { name: "2D", exact: true }).click();
     await expect(page.getByRole("img", { name: /Interactive two-dimensional tile cut plan/ })).toBeVisible();
+    await expect(page.locator(".plan-2d-svg")).toHaveAttribute("viewBox", /^-\d+ -\d+ \d+ \d+$/);
     await page.locator(".plan-2d-piece").first().click();
-    await expect(page.locator(".selection-overlay")).toContainText("P-");
+    const selectedPiece = await page.locator(".selection-type").innerText();
+    await expect(page.locator(".selection-overlay")).toContainText(selectedPiece);
+    await page.getByRole("button", { name: "3D", exact: true }).click();
+    await expect(page.getByRole("heading", { name: /Room in 3D/ })).toBeVisible();
+    await expect(page.locator(".selection-overlay")).toContainText(selectedPiece);
+    await page.getByRole("button", { name: "2D", exact: true }).click();
+    await expect(page.locator(".selection-overlay")).toContainText(selectedPiece);
     await expect(page.getByRole("link", { name: "Create an account" })).toBeVisible();
   } finally {
     await page.close();
@@ -44,7 +106,7 @@ test("public demo lets visitors inspect a polygon plan without signing in", asyn
 });
 
 test("a previous browser-local pilot backup can be imported into a private project", async ({ browser }) => {
-  test.skip(!canUseLocalSupabase, "Start local Supabase and configure .env.local to run authenticated end-to-end coverage.");
+  test.skip(!canUseLocalSupabase, localSupabaseSkipReason);
 
   const admin = createClient(supabaseUrl, supabaseSecretKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
@@ -97,7 +159,7 @@ test("a previous browser-local pilot backup can be imported into a private proje
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Import to project" }).click();
     await expect(page).toHaveURL(/\/projects\/[0-9a-f-]+$/);
-    await page.getByText("ROOM PLAN / LEGACY-01").click();
+    await page.getByText("SURFACE / LEGACY-01").click();
     await expect(page).toHaveURL(/\/projects\/[0-9a-f-]+\/rooms\/[0-9a-f-]+$/);
     await expect(page.getByText("Installer usual")).toBeVisible();
     await expect(page.getByText(`${usual} tiles`)).toHaveCount(2);
@@ -108,7 +170,7 @@ test("a previous browser-local pilot backup can be imported into a private proje
 });
 
 test("email registration confirms through Supabase and establishes an authenticated session", async ({ browser, request }) => {
-  test.skip(!canUseLocalSupabase, "Start local Supabase and configure .env.local to run authenticated end-to-end coverage.");
+  test.skip(!canUseLocalSupabase, localSupabaseSkipReason);
 
   const admin = createClient(supabaseUrl, supabaseSecretKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
@@ -157,7 +219,7 @@ test("email registration confirms through Supabase and establishes an authentica
 
 test("room plans can select a product from the shared supplier catalog", async ({ browser }) => {
   test.setTimeout(60_000);
-  test.skip(!canUseLocalSupabase, "Start local Supabase and configure .env.local to run authenticated end-to-end coverage.");
+  test.skip(!canUseLocalSupabase, localSupabaseSkipReason);
 
   const admin = createClient(supabaseUrl, supabaseSecretKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
@@ -208,10 +270,11 @@ test("room plans can select a product from the shared supplier catalog", async (
     await page.getByRole("button", { name: "Create project" }).click();
     await expect(page).toHaveURL(/\/projects\/[0-9a-f-]+$/);
     const projectId = new URL(page.url()).pathname.split("/").at(-1);
-    await page.getByRole("link", { name: "Add room plan" }).click();
+    await page.getByRole("link", { name: "Add surface plan" }).click();
     await page.getByLabel("Search supplier catalog").fill(catalogCode);
     await page.getByRole("option", { name: new RegExp(catalogCode) }).click();
     await expect(page.getByLabel("Tile width in millimeters")).toHaveValue("600");
+    await page.locator(".geometry-editor > summary").click();
     await page.getByLabel("Room outline").selectOption("l-shape");
     await page.getByRole("button", { name: "Apply L-shape" }).click();
     await page.getByLabel("Installation pattern").selectOption("half-offset");
@@ -219,14 +282,24 @@ test("room plans can select a product from the shared supplier catalog", async (
     await page.getByLabel("Feature Y position mm").fill("600");
     await page.getByRole("button", { name: "Add column / obstacle" }).click();
     await page.getByLabel("Tiles per carton").fill("8");
-    await page.getByRole("button", { name: "Save room plan" }).click();
+    await page.getByRole("button", { name: "Save surface plan" }).click();
     await expect(page).toHaveURL(/\/projects\/[0-9a-f-]+\/rooms\/[0-9a-f-]+$/);
     await page.getByRole("button", { name: "2D", exact: true }).click();
     await expect(page.getByRole("img", { name: /Interactive two-dimensional tile cut plan/ })).toBeVisible();
     await page.locator(".plan-2d-piece").first().click();
     await expect(page.locator(".selection-overlay")).toContainText("P-");
-    await page.getByLabel("Actual tiles used").fill("64");
+    await page.getByLabel("Tiles consumed including breakage").fill("64");
     await page.getByLabel("Breakage tiles").fill("2");
+    await page.getByLabel("Tiles installed excluding breakage").fill("62");
+    await page.getByLabel("Installer / crew label").fill("Crew A");
+    await page.getByRole("button", { name: "Add reusable offcuts" }).click();
+    await page.getByLabel("Reusable offcuts 1 width in millimeters").fill("300");
+    await page.getByLabel("Reusable offcuts 1 length in millimeters").fill("150");
+    await page.getByLabel("Reusable offcuts 1 quantity").fill("2");
+    await page.getByRole("button", { name: "Add discarded material" }).click();
+    await page.getByLabel("Discarded material 1 width in millimeters").fill("80");
+    await page.getByLabel("Discarded material 1 length in millimeters").fill("70");
+    await page.getByLabel("Discarded material 1 quantity").fill("1");
     await page.getByLabel("Installation time minutes").fill("390");
     await page.getByLabel(/Plan practicality/).selectOption("4");
     await page.getByRole("button", { name: "Save installation outcome" }).click();
@@ -243,10 +316,18 @@ test("room plans can select a product from the shared supplier catalog", async (
     expect(savedSnapshot.result_summary.cartonsToOrder).toBeGreaterThan(0);
     const outcome = Array.isArray(savedSnapshot.installation_outcomes) ? savedSnapshot.installation_outcomes[0] : savedSnapshot.installation_outcomes;
     expect(outcome.actual_tiles_used).toBe(64);
+    expect(outcome.actual_tiles_installed).toBe(62);
+    expect(outcome.installer_label).toBe("Crew A");
+    expect(outcome.reusable_offcuts).toEqual([{ widthMm: 300, lengthMm: 150, quantity: 2 }]);
+    expect(outcome.discarded_offcuts).toEqual([{ widthMm: 80, lengthMm: 70, quantity: 1 }]);
+    expect(outcome.consumption_basis).toBe("consumed-including-breakage-v1");
     expect(outcome.breakage_tiles).toBe(2);
     await page.getByRole("link", { name: "Evaluation" }).click();
     await expect(page.getByRole("heading", { name: "Pilot evaluation." })).toBeVisible();
     await expect(page.getByText(/Catalog .* · ROOM-01/)).toBeVisible();
+    await page.getByLabel("Group outcomes by").selectOption("installer");
+    await page.getByRole("button", { name: "Update comparison" }).click();
+    await expect(page.locator(".cohort-table")).toContainText("Crew A");
     await page.goto(`/projects/${projectId}`);
     await expect(page.getByText(new RegExp(`TileLoop Test Supplier · Test Series · ${catalogCode}`))).toBeVisible();
   } finally {
@@ -257,7 +338,7 @@ test("room plans can select a product from the shared supplier catalog", async (
 });
 
 test("a private user creates, versions, exports, and deletes a project", async ({ browser }) => {
-  test.skip(!canUseLocalSupabase, "Start local Supabase and configure .env.local to run authenticated end-to-end coverage.");
+  test.skip(!canUseLocalSupabase, localSupabaseSkipReason);
 
   const admin = createClient(supabaseUrl, supabaseSecretKey, {
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
@@ -269,6 +350,7 @@ test("a private user creates, versions, exports, and deletes a project", async (
   let projectId;
   let owner;
   let stranger;
+  let viewer;
 
   try {
     for (const email of [ownerEmail, strangerEmail]) {
@@ -289,13 +371,13 @@ test("a private user creates, versions, exports, and deletes a project", async (
     await expect(owner).toHaveURL(/\/projects\/[0-9a-f-]+$/);
     projectId = new URL(owner.url()).pathname.split("/").at(-1);
 
-    await owner.getByRole("link", { name: "Add room plan" }).click();
+    await owner.getByRole("link", { name: "Add surface plan" }).click();
     await owner.getByLabel(/Installer estimate/).fill("72");
     await owner.getByLabel(/Comparison note/).fill("Matched site dimensions and tile stock.");
     await expect(owner.getByLabel(/Installer estimate/)).toHaveValue("72");
-    await owner.getByRole("button", { name: "Save room plan" }).click();
-    await expect(owner).toHaveURL(new RegExp(`/projects/${projectId}/rooms/[0-9a-f-]+$`));
-    await expect(owner.getByText("tileloop-plan-2")).toBeVisible();
+    await owner.getByRole("button", { name: "Save surface plan" }).click();
+    await expect(owner).toHaveURL(new RegExp(`/projects/${projectId}/rooms/[0-9a-f-]+$`), { timeout: 15000 });
+    await expect(owner.getByText("tileloop-plan-4")).toBeVisible();
 
     const firstExportResponse = await owner.context().request.get(`${new URL(owner.url()).origin}/api/export`);
     expect(firstExportResponse.status()).toBe(200);
@@ -321,6 +403,23 @@ test("a private user creates, versions, exports, and deletes a project", async (
     const installerSnapshot = exportedSnapshots.find((snapshot) => snapshot.installer_comparisons);
     expect(installerSnapshot.installer_comparisons.installer_estimate_tiles).toBe(72);
 
+    const restoreResponse = await owner.context().request.post(`${new URL(owner.url()).origin}/api/export`, { data: exportData });
+    expect(restoreResponse.status()).toBe(200);
+    expect(await restoreResponse.json()).toMatchObject({ restoredProjects: 1, restoredRoomPlans: 1, restoredSnapshots: 2, restoredComparisons: 1 });
+
+    await owner.goto(`/projects/${projectId}`);
+    await owner.getByRole("button", { name: "Create read-only link" }).click();
+    await expect(owner.getByRole("status")).toContainText("New read-only link created");
+    const shareUrl = await owner.getByLabel("Read-only share URL").inputValue();
+    viewer = await browser.newPage();
+    const sharedResponse = await viewer.goto(shareUrl);
+    expect(sharedResponse.status()).toBe(200);
+    await expect(viewer.getByText("READ-ONLY PROJECT")).toBeVisible();
+    await expect(viewer.getByText("SURFACE / ROOM-01")).toBeVisible();
+    await owner.getByRole("button", { name: "Revoke link" }).click();
+    await expect(owner.getByRole("status")).toContainText("Share link revoked");
+    expect((await viewer.request.get(shareUrl)).status()).toBe(404);
+
     stranger = await browser.newPage();
     await stranger.goto("/login");
     await stranger.getByLabel("Email address").fill(strangerEmail);
@@ -334,7 +433,10 @@ test("a private user creates, versions, exports, and deletes a project", async (
     owner.once("dialog", (dialog) => dialog.accept());
     await owner.getByRole("button", { name: "Delete project" }).click();
     await expect(owner).toHaveURL(/\/dashboard$/);
-    await expect(owner.getByText(`Acceptance ${runId}`)).toHaveCount(0);
+    await owner.goto(`/projects/${projectId}`);
+    await expect(owner.getByText("Page not found.")).toBeVisible();
+    await owner.goto("/dashboard");
+    await expect(owner.getByText(`Acceptance ${runId}`)).toHaveCount(1);
 
     await owner.goto("/account");
     await owner.getByLabel("Type DELETE to confirm").fill("DELETE");
@@ -345,6 +447,7 @@ test("a private user creates, versions, exports, and deletes a project", async (
   } finally {
     await owner?.close();
     await stranger?.close();
+    await viewer?.close();
     for (const userId of users) await admin.auth.admin.deleteUser(userId);
   }
 });

@@ -11,9 +11,9 @@ export default async function DashboardPage() {
     <main id="main-content" className="workspace-main">
       <section className="workspace-hero">
         <div>
-          <span className="eyebrow-chip">PRIVATE WORKSPACE</span>
+          <span className="eyebrow-chip">INSTALLER WORKSPACE</span>
           <h1>Your tile projects.</h1>
-          <p>Keep room measurements, saved estimates, and installer comparisons in one place.</p>
+          <p>Keep room measurements, saved estimates, and job comparisons in one place.</p>
         </div>
         <div className="workspace-count"><strong>{projects.length}</strong><span>PROJECTS</span></div>
       </section>
@@ -26,7 +26,7 @@ export default async function DashboardPage() {
             <span className="field-kicker">PROJECT / {project.id.slice(0, 8).toUpperCase()}</span>
             <h2>{project.name}</h2>
             <div className="project-card-meta"><span>{project.roomCount} {project.roomCount === 1 ? "room plan" : "room plans"}</span><span>Updated {new Date(project.updatedAt).toLocaleDateString()}</span></div>
-            <span className="project-card-link">Open project →</span>
+            <span className="project-card-link">Open project</span>
           </Link>
         ))}
         {!projects.length && <div className="empty-projects"><span className="field-kicker">GET STARTED</span><h2>Create your first project</h2><p>Projects group the rooms you plan for one customer, site, or job.</p></div>}

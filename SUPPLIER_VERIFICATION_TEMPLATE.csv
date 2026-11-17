@@ -1,0 +1,1 @@
+supplier_key,market_code,supplier_code,brand,product_name,collection_name,color,format_label,width_mm,height_mm,tiles_per_carton,coverage_per_carton,price_amount,price_currency,price_unit,stock_quantity,stock_unit,stock_updated_at_utc,source_page_url,source_document_reference,verification_method,verified_by,verified_at_utc,ordering_status,review_notes

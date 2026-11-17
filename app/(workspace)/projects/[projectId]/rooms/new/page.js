@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import RoomPlanEditor from "../../../../../../components/RoomPlanEditor.jsx";
 import { DEFAULT_FORM } from "../../../../../../lib/planner.js";
 import { getProjectWithPlans } from "../../../../../../lib/data/projects.js";
@@ -17,7 +16,7 @@ export default async function NewRoomPlanPage({ params }) {
 
   return (
     <>
-      <div className="workspace-breadcrumb"><Link href={`/projects/${project.id}`}><ArrowLeft size={14} /> {project.name}</Link></div>
+      <div className="workspace-breadcrumb"><Link href={`/projects/${project.id}`}>{project.name}</Link></div>
       <RoomPlanEditor projectId={project.id} initialForm={initialForm} catalogItems={catalogItems} />
     </>
   );

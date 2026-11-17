@@ -12,6 +12,9 @@ function rectanglePath(piece) {
 
 export default function RoomPlan2D({ plan, selectedPieceNumber, onPieceSelect }) {
   const bounds = plan.bounds || { minX: 0, minY: 0 };
+  const planWidth = bounds.widthMm ?? plan.roomWidth;
+  const planLength = bounds.lengthMm ?? plan.roomLength;
+  const viewPadding = Math.max(Math.min(plan.tileWidth, plan.tileLength) * 0.35, 100);
   const mapX = (x) => x - bounds.minX;
   const mapY = (y) => y - bounds.minY;
   const outline = plan.footprint?.length
@@ -20,7 +23,7 @@ export default function RoomPlan2D({ plan, selectedPieceNumber, onPieceSelect })
 
   return (
     <div className="plan-2d-shell">
-      <svg className="plan-2d-svg" viewBox={`0 0 ${plan.roomWidth} ${plan.roomLength}`} role="img" aria-label="Interactive two-dimensional tile cut plan. Select a piece to inspect its ID and dimensions.">
+      <svg className="plan-2d-svg" viewBox={`${-viewPadding} ${-viewPadding} ${planWidth + viewPadding * 2} ${planLength + viewPadding * 2}`} role="img" aria-label="Interactive two-dimensional tile cut plan. Select a piece to inspect its ID and dimensions.">
         <path d={outline} className="plan-2d-floor" fillRule="evenodd" />
         {plan.pieces.map((piece) => {
           const selected = piece.number === selectedPieceNumber;
@@ -56,7 +59,7 @@ export default function RoomPlan2D({ plan, selectedPieceNumber, onPieceSelect })
         })}
         <path d={outline} className="plan-2d-boundary" fill="none" fillRule="evenodd" />
       </svg>
-      <div className="plan-2d-scale">{plan.roomWidth} × {plan.roomLength} mm · {plan.pattern || "straight"}</div>
+      <div className="plan-2d-scale">{planWidth} × {planLength} mm plan bounds · {plan.pattern || "straight"}</div>
     </div>
   );
 }

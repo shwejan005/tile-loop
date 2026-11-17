@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileUp, Upload } from "lucide-react";
 import {
   LEGACY_PILOT_STORAGE_KEY,
   PILOT_STORAGE_KEY,
@@ -95,8 +94,8 @@ export default function LegacyPilotImport() {
       <div className="legacy-import-actions">
         <span className="legacy-import-count">{entries.length ? `${entries.length} records ready` : "No local records detected"}</span>
         <input ref={fileInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={readBackup} aria-label="Choose an earlier TileLoop JSON backup" />
-        <button className="outline-button" type="button" onClick={() => fileInputRef.current?.click()}><FileUp size={13} /> Choose backup</button>
-        <button className="primary-action" type="button" onClick={() => importEntries()} disabled={!entries.length || pending}><Upload size={13} /> {pending ? "Importing…" : "Import to project"}</button>
+        <button className="outline-button" type="button" onClick={() => fileInputRef.current?.click()}>Choose backup</button>
+        <button className="primary-action" type="button" onClick={() => importEntries()} disabled={!entries.length || pending}>{pending ? "Importing…" : "Import to project"}</button>
         {message && <p className="legacy-import-message" role="status">{message}</p>}
       </div>
     </section>

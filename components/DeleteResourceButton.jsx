@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
 import { deleteProjectAction, deleteRoomPlanAction } from "../app/actions/projects.js";
 
 export default function DeleteResourceButton({ type, projectId, roomPlanId, label }) {
@@ -34,7 +33,7 @@ export default function DeleteResourceButton({ type, projectId, roomPlanId, labe
   return (
     <div className="delete-resource-wrap">
       <button className="danger-button" type="button" onClick={remove} disabled={pending}>
-        <Trash2 size={14} /> {pending ? "Deleting…" : type === "project" ? "Delete project" : "Delete room plan"}
+        {pending ? "Deleting…" : type === "project" ? "Delete project" : "Delete surface plan"}
       </button>
       {message && <span className="delete-resource-message" role="alert">{message}</span>}
     </div>

@@ -5,7 +5,7 @@ export default function AppHeader({ email = "" }) {
   return (
     <header className="topbar app-topbar">
       <Link href={email ? "/dashboard" : "/"} className="brand" aria-label="TileLoop home">
-        <span className="brand-mark"><i /><i /><i /><i /></span><span>tileloop</span>
+        <span>TileLoop</span>
       </Link>
       {email ? (
         <nav className="account-nav" aria-label="Account navigation">
@@ -18,7 +18,7 @@ export default function AppHeader({ email = "" }) {
       ) : (
         <nav className="account-nav" aria-label="Account navigation">
           <Link href="/login">Sign in</Link>
-          <Link className="header-button" href="/signup">Create account</Link>
+          <Link className="header-button" href="/signup">Create installer account</Link>
         </nav>
       )}
     </header>

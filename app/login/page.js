@@ -22,7 +22,7 @@ export default async function LoginPage({ searchParams }) {
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <main id="main-content" className="auth-page">
         <section className="auth-card">
-          <span className="field-kicker">PRIVATE WORKSPACE</span>
+          <span className="field-kicker">INSTALLER WORKSPACE</span>
           <h1>Welcome back.</h1>
           <p>Sign in to open your projects and saved room plans.</p>
           <AuthForm mode="login" next={next} initialError={params?.error === "confirmation" ? "The confirmation link expired or could not be verified. Request a new link or sign in." : ""} />

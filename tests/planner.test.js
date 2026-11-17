@@ -56,6 +56,32 @@ test("measurement formatting preserves hundredth-millimeter precision", () => {
   assert.equal(formatNumber(600.01), "600.01");
 });
 
+test("layout start point can center the pattern or anchor it at the room's top-left bounds", () => {
+  const form = { ...DEFAULT_FORM, roomWidth: 1800, roomLength: 1500, tileWidth: 600, tileLength: 600, grout: 3 };
+  const centered = calculatePlan(form);
+  const anchored = calculatePlan({ ...form, layoutStart: "top-left" });
+  const invalid = calculatePlan({ ...form, layoutStart: "right-edge" });
+
+  assert.equal(centered.layoutStart, "centered");
+  assert.equal(anchored.error, undefined);
+  assert.equal(anchored.geometryMode, true);
+  assert.equal(Math.min(...anchored.cells.map((cell) => cell.tileX)), 0);
+  assert.equal(Math.min(...anchored.cells.map((cell) => cell.tileY)), 0);
+  assert.notDeepEqual(anchored.pieces.map((piece) => [piece.x, piece.y]), centered.pieces.map((piece) => [piece.x, piece.y]));
+  assert.match(invalid.error, /starting point/);
+});
+
+test("stock cut rotation remains opt-in and records the rotated stock allocation", () => {
+  const form = { ...DEFAULT_FORM, roomWidth: 350, roomLength: 450, tileWidth: 600, tileLength: 400, grout: 0, kerf: 0, reserve: 0 };
+  const fixed = calculatePlan(form);
+  const rotated = calculatePlan({ ...form, allowCutRotation: true });
+  assert.equal(fixed.error, undefined);
+  assert.equal(fixed.stockTiles, 2);
+  assert.equal(rotated.error, undefined);
+  assert.equal(rotated.stockTiles, 1);
+  assert.ok(rotated.pieces.some((piece) => piece.stockRotated));
+});
+
 test("rotating rectangular stock changes the plan orientation without losing input dimensions", () => {
   const form = {
     ...DEFAULT_FORM,

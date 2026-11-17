@@ -1,5 +1,7 @@
 # Approved supplier facts
 
+Use [SUPPLIER_VERIFICATION_TEMPLATE.csv](./SUPPLIER_VERIFICATION_TEMPLATE.csv) to capture source provenance and the reviewer before approving a live feed.
+
 TileLoop accepts a supplier-provided JSON feed using `tileloop-approved-supplier-feed/v1`. Each product carries its SKU/format, carton count, price amount/currency/unit (`tile`, `carton`, or `m2`), and stock quantity/unit (`tiles`, `cartons`, or `m2`) with an update time. The feed must identify its source and verification time.
 
 Check a feed without writing to the database:
